@@ -29,7 +29,7 @@ Inne skrypty:
 | Akcja | Klawisz |
 | --- | --- |
 | Ruch | WSAD |
-| Celowanie | Mysz |
+| Celowanie | Mysz (strzałem gasisz świece) |
 | Strzał | LPM |
 | Rozpad w mgłę (unik, nietykalność) | PPM albo lewy Shift |
 | Przeładowanie | R |
@@ -57,6 +57,18 @@ Inne skrypty:
 - Q wysyła sługi na wskazany punkt: idą tam i walczą ze strażnikami w pobliżu.
 - Strażnicy atakują najbliższy cel: ciebie albo sługę. Sługa w linii strzału przyjmuje kulę na siebie.
 - Trupy zostają na posadzce do końca walki.
+
+## Kamień milowy 3: mrok i zasadzka
+
+- Pokój zaczyna się w mroku. Strażnicy stoją, modlą się albo patrolują z latarnią i nie wiedzą, że tu jesteś.
+- Widzą cię, gdy wejdziesz w światło, podejdziesz bardzo blisko albo błyśniesz wystrzałem w ich pobliżu.
+  Przewrócenie ławki koło nich też ich budzi. Wtedy pada ALARM i rusza cała sala.
+- Pierwszy strzał z mroku to zasadzka: podwójne obrażenia (zabija halabardnika jednym strzałem).
+- Świece gasisz strzałem, żeby powiększyć mrok przed walką.
+- W świetle zadajesz mniej obrażeń, a po kilku sekundach światło zaczyna parzyć (pół serca co 3 s).
+- W mroku sługi biją mocniej i wolniej się rozpadają, w świetle rozpadają się szybciej i dostają mocniej.
+- Strażnik z latarnią po śmierci upuszcza ją, a latarnia dalej świeci na posadzce.
+- W mroku widać tylko żarzące się oczy, dusze, płomienie i kule. HUD pokazuje, czy stoisz w świetle i czy cię wykryto.
 
 Cała grafika to na razie stylizowane placeholdery w palecie gry. Sprite'y według przewodnika stylu dojdą później.
 

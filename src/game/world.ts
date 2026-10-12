@@ -80,7 +80,10 @@ export type UnitKind = "halberdier" | "arquebusier";
 /** Kept for readability at call sites that only deal with hostiles. */
 export type EnemyKind = UnitKind;
 export type Team = "enemy" | "minion";
-export type UnitState = "approach" | "windup" | "charge" | "recover" | "reposition" | "aim" | "reload" | "follow";
+export type UnitState =
+  | "approach" | "windup" | "charge" | "recover" | "reposition" | "aim" | "reload" | "follow"
+  /** Before the alarm: standing still (sleeping, praying, on watch) or walking a patrol route. */
+  | "idle" | "patrol";
 
 export interface Unit {
   id: number;
@@ -103,6 +106,11 @@ export interface Unit {
   lifetime: number;
   /** How many times this body has already been raised. */
   raises: number;
+  /** Patrol route walked before the alarm. */
+  route: Vec[];
+  routeIdx: number;
+  /** Carries a lantern (a moving light source). */
+  lantern: boolean;
   alive: boolean;
 }
 /** Kept for readability: an enemy is a Unit on the "enemy" team. */
@@ -129,6 +137,20 @@ export interface Soul {
 
 export type Faction = "player" | "enemy" | "minion";
 
+export type LightKind = "candle" | "lantern" | "flash";
+
+export interface Light {
+  id: number;
+  kind: LightKind;
+  pos: Vec;
+  radius: number;
+  on: boolean;
+  /** Lanterns follow the unit that carries them. */
+  owner?: number;
+  /** Muzzle flashes last a moment. */
+  life?: number;
+}
+
 export interface Bullet {
   pos: Vec;
   vel: Vec;
@@ -136,6 +158,8 @@ export interface Bullet {
   damage: number;
   from: Faction;
   life: number;
+  /** Fired from the dark before the alarm: double damage. */
+  ambush?: boolean;
 }
 
 export interface Cover extends Rect {
@@ -147,8 +171,8 @@ export interface Cover extends Rect {
 
 export type GameEvent =
   | { type: "shot"; pos: Vec; dir: Vec; from: Faction }
-  | { type: "enemyHit"; pos: Vec; dir: Vec; enemy: number }
-  | { type: "enemyDeath"; pos: Vec; dir: Vec; kind: UnitKind }
+  | { type: "enemyHit"; pos: Vec; dir: Vec; enemy: number; ambush: boolean }
+  | { type: "enemyDeath"; pos: Vec; dir: Vec; kind: UnitKind; ambush: boolean }
   | { type: "minionHit"; pos: Vec; dir: Vec; unit: number }
   | { type: "minionDeath"; pos: Vec; dir: Vec; kind: UnitKind; crumbled: boolean }
   | { type: "playerHit"; pos: Vec; dir: Vec }
@@ -165,6 +189,9 @@ export type GameEvent =
   | { type: "raise"; pos: Vec; kind: UnitKind; unit: number }
   | { type: "raiseFail"; pos: Vec; reason: "noSouls" | "limit" }
   | { type: "command"; pos: Vec }
+  | { type: "alarm"; pos: Vec; by: number }
+  | { type: "candleOut"; pos: Vec; light: number }
+  | { type: "burn"; pos: Vec }
   | { type: "roomCleared" };
 
 const statsOf = (kind: UnitKind) => (kind === "halberdier" ? CONFIG.halberdier : CONFIG.arquebusier);
@@ -182,6 +209,14 @@ export class World {
   events: GameEvent[] = [];
   /** Active Q order: minions go to this point and fight there. */
   order: { pos: Vec; time: number } | null = null;
+  lights: Light[] = [];
+  /** A dark room: light and darkness change the rules (see CONFIG.darkness). */
+  dark = false;
+  /** Before the alarm the guards don't know the necromancer is here. */
+  alarm = true;
+  /** Seconds the player has stood in light (burns after CONFIG.darkness.burnDelay). */
+  exposure = 0;
+  private burnTick = 0;
   time = 0;
   cleared = false;
   private nextId = 1;
@@ -233,11 +268,21 @@ export class World {
     ] as const) {
       w.addCover(x, y, cw, ch);
     }
-    w.spawn("halberdier", vec(W * 0.2, H * 0.18));
-    w.spawn("halberdier", vec(W * 0.5, H * 0.12));
-    w.spawn("halberdier", vec(W * 0.82, H * 0.2));
-    w.spawn("arquebusier", vec(W * 0.12, H * 0.35));
-    w.spawn("arquebusier", vec(W * 0.9, H * 0.38));
+    w.dark = true;
+    w.alarm = false;
+    // candles: the altar, two corners, two by the side walls
+    for (const [x, y] of [[W * 0.5, H * 0.13], [W * 0.1, H * 0.14], [W * 0.9, H * 0.14], [W * 0.07, H * 0.55], [W * 0.93, H * 0.55]] as const) {
+      w.addLight("candle", vec(x, y));
+    }
+    w.spawn("halberdier", vec(W * 0.5, H * 0.2), "enemy", { state: "idle" }); // praying at the altar
+    w.spawn("halberdier", vec(W * 0.3, H * 0.24), "enemy", { state: "idle" }); // dozing in the dark
+    w.spawn("halberdier", vec(W * 0.3, H * 0.58), "enemy", {
+      state: "patrol",
+      lantern: true,
+      route: [vec(W * 0.3, H * 0.58), vec(W * 0.7, H * 0.58), vec(W * 0.7, H * 0.36), vec(W * 0.3, H * 0.36)],
+    });
+    w.spawn("arquebusier", vec(W * 0.13, H * 0.24), "enemy", { state: "idle" });
+    w.spawn("arquebusier", vec(W * 0.87, H * 0.24), "enemy", { state: "idle" });
     return w;
   }
 
@@ -247,7 +292,45 @@ export class World {
     return c;
   }
 
-  spawn(kind: UnitKind, pos: Vec, team: Team = "enemy"): Unit {
+  addLight(kind: LightKind, pos: Vec, owner?: number): Light {
+    const d = CONFIG.darkness;
+    const radius = kind === "candle" ? d.candleRadius : kind === "lantern" ? d.lanternRadius : d.flashRadius;
+    const l: Light = { id: this.nextId++, kind, pos: { ...pos }, radius, on: true, owner, life: kind === "flash" ? d.flashTime : undefined };
+    this.lights.push(l);
+    return l;
+  }
+
+  /** 1 inside the bright core of a light, 0.5 in its outer band, 0 in darkness. */
+  lightAt(p: Vec, includeFlash = true): number {
+    let v = 0;
+    for (const l of this.lights) {
+      if (!l.on || (!includeFlash && l.kind === "flash")) continue;
+      const d = dist(p, l.pos);
+      if (d < l.radius * 0.6) return 1;
+      if (d < l.radius) v = 0.5;
+    }
+    return v;
+  }
+
+  /** Standing inside any light's radius. */
+  isLit(p: Vec, includeFlash = true): boolean {
+    return this.lightAt(p, includeFlash) > 0;
+  }
+
+  /** Damage multiplier for the necromancer's side, from light and darkness. */
+  private sideMul(pos: Vec, minion: boolean): number {
+    if (!this.dark) return 1;
+    const d = CONFIG.darkness;
+    if (this.isLit(pos)) return d.lightDamageMul;
+    return minion ? d.minionDarkDamageMul : 1;
+  }
+
+  spawn(
+    kind: UnitKind,
+    pos: Vec,
+    team: Team = "enemy",
+    opts: { state?: "idle" | "patrol"; route?: Vec[]; lantern?: boolean } = {},
+  ): Unit {
     const cfg = statsOf(kind);
     const u: Unit = {
       id: this.nextId++,
@@ -265,9 +348,14 @@ export class World {
       strafe: this.rng() < 0.5 ? -1 : 1,
       lifetime: team === "minion" ? CONFIG.necro.minionLifetime : Infinity,
       raises: 0,
+      route: opts.route ?? [],
+      routeIdx: 0,
+      lantern: opts.lantern ?? false,
       alive: true,
     };
+    if (opts.state && team === "enemy") u.state = opts.state;
     this.units.push(u);
+    if (u.lantern) this.addLight("lantern", u.pos, u.id);
     return u;
   }
 
@@ -306,6 +394,9 @@ export class World {
     for (const u of this.units) if (u.alive) this.updateUnit(u, dt);
     this.updateBullets(dt);
     this.updateDead(dt);
+    this.updateLights(dt);
+    if (!this.alarm) this.detect();
+    if (this.dark && this.player.alive) this.updateBurn(dt);
     this.units = this.units.filter((u) => u.alive);
     if (!this.cleared && this.enemies.length === 0) {
       this.cleared = true;
@@ -358,7 +449,10 @@ export class World {
       const a = p.facing + (this.rng() - 0.5) * 2 * fl.spread;
       const dir = fromAngle(a);
       const muzzle = add(p.pos, scale(dir, cfg.radius + 18));
-      this.bullets.push({ pos: muzzle, vel: scale(dir, fl.bulletSpeed), radius: fl.bulletRadius, damage: fl.damage, from: "player", life: 1.6 });
+      const ambush = this.dark && !this.alarm;
+      const damage = fl.damage * this.sideMul(p.pos, false) * (ambush ? CONFIG.darkness.ambushMul : 1);
+      this.bullets.push({ pos: muzzle, vel: scale(dir, fl.bulletSpeed), radius: fl.bulletRadius, damage, from: "player", life: 1.6, ambush });
+      if (this.dark) this.addLight("flash", muzzle);
       w.loaded -= 1;
       p.push = add(p.push, scale(dir, -fl.recoil * 10)); // push decays at 10/s, so v0 = distance * 10
       this.events.push({ type: "shot", pos: muzzle, dir, from: "player" });
@@ -379,7 +473,12 @@ export class World {
       }
       if (best) {
         best.flipped = true;
-        this.events.push({ type: "coverFlip", cover: best.id, pos: { x: best.x + best.w / 2, y: best.y + best.h / 2 } });
+        const at = { x: best.x + best.w / 2, y: best.y + best.h / 2 };
+        this.events.push({ type: "coverFlip", cover: best.id, pos: at });
+        if (!this.alarm) {
+          const woken = this.enemies.find((e) => dist(e.pos, at) < CONFIG.darkness.noiseRadius);
+          if (woken) this.raiseAlarm(woken);
+        }
       }
     }
 
@@ -467,8 +566,13 @@ export class World {
   private updateUnit(u: Unit, dt: number): void {
     u.flash = Math.max(0, u.flash - dt);
     u.timer -= dt;
+    if (u.team === "enemy" && (u.state === "idle" || u.state === "patrol")) {
+      this.updateUnaware(u, dt);
+      return;
+    }
     if (u.team === "minion") {
-      u.lifetime -= dt;
+      const d = CONFIG.darkness;
+      u.lifetime -= dt * (this.dark ? (this.isLit(u.pos, false) ? d.minionLightDecay : d.minionDarkDecay) : 1);
       if (u.lifetime <= 0) {
         this.killUnit(u, vec(0, 1), true);
         return;
@@ -558,7 +662,7 @@ export class World {
               pos: muzzle,
               vel: scale(u.dir, c.bulletSpeed),
               radius: c.bulletRadius,
-              damage: u.team === "enemy" ? CONFIG.enemyBulletDamage : CONFIG.flintlock.damage,
+              damage: u.team === "enemy" ? CONFIG.enemyBulletDamage : CONFIG.flintlock.damage * this.sideMul(u.pos, true),
               from: u.team,
               life: 4,
             });
@@ -605,31 +709,35 @@ export class World {
     for (const o of this.units) {
       if (!o.alive || o.team === u.team) continue;
       if (dist(u.pos, o.pos) < u.radius + o.radius + 4) {
-        this.hurtUnit(o, u.team === "enemy" ? CONFIG.hitOnMinion : CONFIG.flintlock.damage, u.dir);
+        this.hurtUnit(o, u.team === "enemy" ? CONFIG.hitOnMinion : CONFIG.flintlock.damage * this.sideMul(u.pos, true), u.dir);
         return true;
       }
     }
     return false;
   }
 
-  private hurtUnit(u: Unit, damage: number, dir: Vec): void {
+  private hurtUnit(u: Unit, damage: number, dir: Vec, ambush = false): void {
+    if (u.team === "minion" && this.dark && this.isLit(u.pos, false)) damage *= CONFIG.darkness.minionLightTakenMul;
     u.hp -= damage;
+    if (!this.alarm && u.team === "enemy") this.raiseAlarm(u);
     u.flash = 0.08;
     u.push = add(u.push, scale(dir, CONFIG.flintlock.knockback * 8));
     if (u.hp <= 0) {
-      this.killUnit(u, dir, false);
+      this.killUnit(u, dir, false, ambush);
     } else if (u.team === "enemy") {
-      this.events.push({ type: "enemyHit", pos: { ...u.pos }, dir, enemy: u.id });
+      this.events.push({ type: "enemyHit", pos: { ...u.pos }, dir, enemy: u.id, ambush });
     } else {
       this.events.push({ type: "minionHit", pos: { ...u.pos }, dir, unit: u.id });
     }
   }
 
-  private killUnit(u: Unit, dir: Vec, crumbled: boolean): void {
+  private killUnit(u: Unit, dir: Vec, crumbled: boolean, ambush = false): void {
     u.alive = false;
     const n = CONFIG.necro;
+    // a dead lantern-bearer drops the lantern; it keeps burning on the floor
+    for (const l of this.lights) if (l.owner === u.id) l.owner = undefined;
     if (u.team === "enemy") {
-      this.events.push({ type: "enemyDeath", pos: { ...u.pos }, dir, kind: u.kind });
+      this.events.push({ type: "enemyDeath", pos: { ...u.pos }, dir, kind: u.kind, ambush });
       this.corpses.push({ id: this.nextId++, kind: u.kind, pos: { ...u.pos }, dir, echo: n.echo, raises: 0, fromMinion: false });
       this.souls.push({ id: this.nextId++, pos: { x: u.pos.x, y: u.pos.y - 30 }, life: n.soulLife });
     } else {
@@ -681,11 +789,20 @@ export class World {
         continue;
       }
       const dir = norm(b.vel);
+      if (b.from === "player") {
+        const candle = this.lights.find((l) => l.kind === "candle" && l.on && dist(l.pos, to) < CONFIG.darkness.candleHitRadius + b.radius);
+        if (candle) {
+          candle.on = false;
+          b.life = 0;
+          this.events.push({ type: "candleOut", pos: { ...candle.pos }, light: candle.id });
+          continue;
+        }
+      }
       // the player's and the minions' bullets hit guards; guards' bullets hit the player and minions
       const hostileTeam: Team = b.from === "enemy" ? "minion" : "enemy";
       for (const u of this.units) {
         if (!u.alive || u.team !== hostileTeam || dist(u.pos, to) > u.radius + b.radius) continue;
-        this.hurtUnit(u, b.from === "enemy" ? CONFIG.hitOnMinion : b.damage, dir);
+        this.hurtUnit(u, b.from === "enemy" ? CONFIG.hitOnMinion : b.damage, dir, b.ambush === true);
         b.life = 0;
         break;
       }
@@ -694,6 +811,81 @@ export class World {
       }
     }
     this.bullets = this.bullets.filter((b) => b.life > 0);
+  }
+
+  // ---------------------------------------------------------------- darkness
+  /** Before the alarm: guards stand (sleeping, praying, on watch) or walk their patrol. */
+  private updateUnaware(u: Unit, dt: number): void {
+    let vel = vec();
+    if (u.state === "patrol" && u.route.length > 0) {
+      const goal = u.route[u.routeIdx % u.route.length];
+      if (dist(u.pos, goal) < 12) u.routeIdx = (u.routeIdx + 1) % u.route.length;
+      u.dir = norm(sub(goal, u.pos));
+      vel = scale(u.dir, statsOf(u.kind).speed * CONFIG.darkness.patrolSpeedMul);
+    }
+    this.moveUnit(u, vel, dt);
+  }
+
+  private updateLights(dt: number): void {
+    for (const l of this.lights) {
+      if (l.owner !== undefined) {
+        const u = this.units.find((x) => x.id === l.owner);
+        if (u) l.pos = { x: u.pos.x + u.dir.x * 18, y: u.pos.y - 10 };
+      }
+      if (l.life !== undefined) l.life -= dt;
+    }
+    this.lights = this.lights.filter((l) => l.life === undefined || l.life > 0);
+  }
+
+  /** Does this guard notice the necromancer or one of his minions? */
+  private sees(u: Unit, pos: Vec): boolean {
+    const d = CONFIG.darkness;
+    const r = dist(u.pos, pos);
+    if (r < d.seeDistance) return true;
+    if (r < d.sightRange && this.isLit(pos, false)) return true;
+    return r < d.flashSight && this.isLit(pos, true);
+  }
+
+  private detect(): void {
+    for (const u of this.units) {
+      if (u.team !== "enemy" || !u.alive) continue;
+      if (this.player.alive && this.sees(u, this.player.pos)) return this.raiseAlarm(u);
+      for (const m of this.units) {
+        if (m.team === "minion" && m.alive && this.sees(u, m.pos)) return this.raiseAlarm(u);
+      }
+    }
+  }
+
+  /** One guard shouts: the whole room starts fighting. */
+  raiseAlarm(by: Unit): void {
+    if (this.alarm) return;
+    this.alarm = true;
+    this.events.push({ type: "alarm", pos: { ...by.pos }, by: by.id });
+    for (const u of this.units) {
+      if (u.team !== "enemy") continue;
+      if (u.state === "idle" || u.state === "patrol") {
+        u.state = u.kind === "halberdier" ? "approach" : "reposition";
+        u.timer = u.kind === "halberdier" ? 0 : 0.4 + this.rng() * 0.8;
+      }
+    }
+  }
+
+  /** Light burns the undead necromancer if he lingers in it. */
+  private updateBurn(dt: number): void {
+    const d = CONFIG.darkness;
+    if (this.isLit(this.player.pos, false)) {
+      this.exposure += dt;
+      if (this.exposure > d.burnDelay) {
+        this.burnTick -= dt;
+        if (this.burnTick <= 0) {
+          this.burnTick = d.burnInterval;
+          if (this.hurtPlayer(1, vec())) this.events.push({ type: "burn", pos: { ...this.player.pos } });
+        }
+      }
+    } else {
+      this.exposure = Math.max(0, this.exposure - dt * 2);
+      this.burnTick = 0;
+    }
   }
 
   /** Returns true if the hit landed (false while dodging or invulnerable). */

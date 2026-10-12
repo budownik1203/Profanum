@@ -38,6 +38,14 @@ export class GameRenderer {
   private corpsesG = new Graphics();
   private soulsG = new Graphics();
   private hintText: Text;
+  /** Darkness: a half-resolution 2D canvas with hard pools of light cut out of it. */
+  private darkCanvas: HTMLCanvasElement;
+  private darkTex: Texture;
+  private darkSprite: Sprite;
+  /** Above the darkness: things that glow (eyes, flames, souls, bullets, sparks). */
+  private glowLayer = new Container();
+  private glowG = new Graphics();
+  private floaters: { text: Text; life: number; vy: number }[] = [];
   private actorsG = new Graphics();
   private bulletsG = new Graphics();
   private fxG = new Graphics();
@@ -60,7 +68,16 @@ export class GameRenderer {
     this.decals = RenderTexture.create({ width, height });
     this.decalSprite = new Sprite(this.decals);
     this.drawFloor();
-    this.camLayer.addChild(this.floor, this.decalSprite, this.corpsesG, this.coversG, this.actorsG, this.soulsG, this.bulletsG, this.fxG);
+    this.camLayer.addChild(this.floor, this.decalSprite, this.corpsesG, this.coversG, this.actorsG);
+    this.glowLayer.addChild(this.glowG, this.soulsG, this.bulletsG, this.fxG);
+
+    this.darkCanvas = document.createElement("canvas");
+    this.darkCanvas.width = VIEW_W / 2;
+    this.darkCanvas.height = VIEW_H / 2;
+    this.darkTex = Texture.from(this.darkCanvas);
+    this.darkSprite = new Sprite(this.darkTex);
+    this.darkSprite.width = VIEW_W;
+    this.darkSprite.height = VIEW_H;
 
     this.vignette = new Sprite(makeVignette());
     this.vignette.width = VIEW_W;
@@ -71,17 +88,19 @@ export class GameRenderer {
     this.hudText.position.set(40, 96);
     this.hintText = new Text({ text: "", style: { ...style, fontSize: 22, fill: PAL.ember } });
     this.hintText.anchor.set(0.5);
-    this.camLayer.addChild(this.hintText);
+    this.glowLayer.addChild(this.hintText);
     this.bannerText = new Text({ text: "", style: { ...style, fontSize: 56, align: "center" } });
     this.bannerText.anchor.set(0.5);
     this.bannerText.position.set(VIEW_W / 2, VIEW_H * 0.42);
 
-    this.root.addChild(this.camLayer, this.vignette, this.hudG, this.hudText, this.bannerText);
+    this.root.addChild(this.camLayer, this.darkSprite, this.glowLayer, this.vignette, this.hudG, this.hudText, this.bannerText);
   }
 
   /** Reset per-room state (decals, particles) for a fresh world. */
   reset(): void {
     this.particles = [];
+    for (const f of this.floaters) f.text.destroy();
+    this.floaters = [];
     this.telegraphs.clear();
     this.shake = 0;
     const clear = new Graphics().rect(0, 0, 1, 1).fill({ color: 0, alpha: 0 });
@@ -104,6 +123,25 @@ export class GameRenderer {
     return { x: vx - this.camLayer.position.x, y: vy - this.camLayer.position.y };
   }
 
+  /** A short line of text rising from a point in the world ("ZASADZKA!", "ALARM!"). */
+  private floatText(pos: Vec, text: string, color: number, size = 30): void {
+    const t = new Text({ text, style: { fontFamily: "Georgia, 'Times New Roman', serif", fontSize: size, fill: color, fontWeight: "bold" } });
+    t.anchor.set(0.5);
+    t.position.set(pos.x, pos.y - 70);
+    this.glowLayer.addChild(t);
+    this.floaters.push({ text: t, life: 1.1, vy: -40 });
+  }
+
+  private updateFloaters(dt: number): void {
+    for (const f of this.floaters) {
+      f.life -= dt;
+      f.text.position.y += f.vy * dt;
+      f.text.alpha = Math.max(0, Math.min(1, f.life / 0.4));
+      if (f.life <= 0) f.text.destroy();
+    }
+    this.floaters = this.floaters.filter((f) => f.life > 0);
+  }
+
   // ---------------------------------------------------------------- events → effects
   handle(events: GameEvent[]): void {
     for (const e of events) {
@@ -115,12 +153,28 @@ export class GameRenderer {
         case "enemyHit":
           this.spray(e.pos, e.dir, 14, 1);
           this.addShake(5);
+          if (e.ambush) this.floatText(e.pos, "ZASADZKA!", PAL.ember);
           break;
         case "enemyDeath":
           this.spray(e.pos, e.dir, 40, 1.6);
           this.chunks(e.pos, e.dir, 7);
           this.bloodPool(e.pos, e.dir);
           this.addShake(12);
+          if (e.ambush) this.floatText(e.pos, "ZASADZKA!", PAL.ember);
+          break;
+        case "alarm":
+          this.floatText(e.pos, "ALARM!", PAL.telegraph, 34);
+          this.addShake(10);
+          break;
+        case "candleOut":
+          for (let i = 0; i < 10; i++) this.spawn(e.pos, rnd(-30, 30), rnd(-90, -30), rnd(0.6, 1.2), rnd(4, 9), PAL.smoke, "smoke");
+          for (let i = 0; i < 6; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-120, 40), rnd(0.15, 0.35), rnd(1.5, 3), PAL.emberHot, "spark");
+          break;
+        case "burn":
+          for (let i = 0; i < 14; i++) this.spawn(e.pos, rnd(-50, 50), rnd(-140, -40), rnd(0.5, 1), rnd(6, 12), PAL.smoke, "smoke");
+          for (let i = 0; i < 8; i++) this.spawn(e.pos, rnd(-80, 80), rnd(-160, -40), rnd(0.2, 0.5), rnd(1.5, 3), PAL.ember, "spark");
+          this.floatText(e.pos, "Światło parzy", PAL.ember, 24);
+          this.addShake(6);
           break;
         case "minionHit":
           for (let i = 0; i < 8; i++) this.spawn(e.pos, e.dir.x * rnd(80, 260) + rnd(-80, 80), e.dir.y * rnd(80, 260) + rnd(-80, 80), rnd(0.2, 0.5), rnd(2, 5), PAL.minion, "chunk");
@@ -203,15 +257,19 @@ export class GameRenderer {
     const sx = (Math.random() - 0.5) * this.shake;
     const sy = (Math.random() - 0.5) * this.shake;
     this.camLayer.position.set(Math.round(VIEW_W / 2 - cx + sx), Math.round(VIEW_H / 2 - cy + sy));
+    this.glowLayer.position.set(this.camLayer.position.x, this.camLayer.position.y);
+    this.updateFloaters(dt);
 
     this.flushStamps();
-    this.drawCovers(world.covers);
+    this.drawCovers(world.covers, world);
     this.drawCorpses(world);
     this.drawActors(world);
     this.drawSouls(world.souls, world.time);
     this.drawOrder(world);
     this.drawBullets(world);
     this.drawParticles();
+    this.drawLights(world);
+    this.drawDarkness(world);
     this.drawHud(world, started);
   }
 
@@ -317,9 +375,15 @@ export class GameRenderer {
   }
 
   // ---------------------------------------------------------------- actors
-  private drawCovers(covers: Cover[]): void {
+  private drawCovers(covers: Cover[], world?: World): void {
     const g = this.coversG;
     g.clear();
+    for (const l of world?.lights ?? []) {
+      if (l.kind !== "candle") continue;
+      g.ellipse(l.pos.x, l.pos.y + 22, 18, 6).fill({ color: PAL.ink, alpha: 0.6 });
+      g.rect(l.pos.x - 10, l.pos.y + 14, 20, 8).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
+      g.rect(l.pos.x - 4, l.pos.y - 6, 8, 22).fill(0xe8dcc0).stroke({ width: 3, color: PAL.ink });
+    }
     for (const c of covers) {
       if (c.broken) continue;
       if (!c.flipped) {
@@ -347,6 +411,55 @@ export class GameRenderer {
     }
   }
 
+  /** Candle flames and lanterns glow above the darkness. */
+  private drawLights(world: World): void {
+    const g = this.glowG;
+    for (const l of world.lights) {
+      if (l.kind === "flash") continue;
+      const flick = Math.sin(world.time * 13 + l.id * 3) * 1.5;
+      if (l.kind === "candle") {
+        if (!l.on) continue;
+        g.circle(l.pos.x, l.pos.y - 12, 14).fill({ color: PAL.ember, alpha: 0.25 });
+        g.poly([l.pos.x - 4, l.pos.y - 8, l.pos.x, l.pos.y - 22 - flick, l.pos.x + 4, l.pos.y - 8]).fill(PAL.emberHot);
+      } else {
+        g.circle(l.pos.x, l.pos.y, 16).fill({ color: PAL.ember, alpha: 0.3 });
+        g.rect(l.pos.x - 6, l.pos.y - 9, 12, 16).fill(PAL.emberHot).stroke({ width: 3, color: PAL.ink });
+      }
+    }
+  }
+
+  /** The room in darkness: black everywhere except hard-edged pools of light. */
+  private drawDarkness(world: World): void {
+    this.darkSprite.visible = world.dark;
+    if (!world.dark) return;
+    const ctx = this.darkCanvas.getContext("2d");
+    if (!ctx) return;
+    const ox = this.camLayer.position.x;
+    const oy = this.camLayer.position.y;
+    const k = 0.5; // the canvas is half resolution
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, this.darkCanvas.width, this.darkCanvas.height);
+    ctx.fillStyle = "rgba(6, 4, 3, 0.92)";
+    ctx.fillRect(0, 0, this.darkCanvas.width, this.darkCanvas.height);
+    ctx.globalCompositeOperation = "destination-out";
+    const hole = (x: number, y: number, r: number, a: number) => {
+      ctx.fillStyle = `rgba(0,0,0,${a})`;
+      ctx.beginPath();
+      ctx.arc((x + ox) * k, (y + oy) * k, r * k, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    for (const l of world.lights) {
+      if (!l.on) continue;
+      const flick = l.kind === "candle" ? 1 + Math.sin(world.time * 9 + l.id) * 0.02 : 1;
+      hole(l.pos.x, l.pos.y, l.radius * flick, 0.55); // outer band
+      hole(l.pos.x, l.pos.y, l.radius * 0.6 * flick, 1); // hard bright core
+    }
+    // the necromancer can always make out his own silhouette, faintly
+    if (world.player.alive) hole(world.player.pos.x, world.player.pos.y - 30, 70, 0.4);
+    ctx.globalCompositeOperation = "source-over";
+    this.darkTex.source.update();
+  }
+
   /** Where the minions were sent with Q. */
   private drawOrder(world: World): void {
     if (!world.order) return;
@@ -361,6 +474,7 @@ export class GameRenderer {
   private drawActors(world: World): void {
     const g = this.actorsG;
     g.clear();
+    this.glowG.clear();
     // draw back to front by y so overlaps read correctly in 3/4 view
     const actors: { y: number; draw: () => void }[] = world.units.map((u) => ({ y: u.pos.y, draw: () => this.drawUnit(u, world) }));
     if (world.player.alive) actors.push({ y: world.player.pos.y, draw: () => this.drawPlayer(world) });
@@ -400,9 +514,11 @@ export class GameRenderer {
     g.rect(x - 22, top + 66, 44, 4).fill(PAL.wood);
     // face hole and ember eyes
     g.ellipse(x + 6 * face, top + 22, 10, 12).fill(PAL.ink);
-    g.circle(x + 3 * face, top + 21, 2.4).fill(PAL.ember);
-    g.circle(x + 11 * face, top + 20, 1.8).fill(PAL.ember);
-    g.circle(x + 6 * face, top + 21, 9).fill({ color: PAL.ember, alpha: 0.12 });
+    // the eyes glow through the darkness
+    const eg = this.glowG;
+    eg.circle(x + 6 * face, top + 21, 10).fill({ color: PAL.ember, alpha: 0.18 });
+    eg.circle(x + 3 * face, top + 21, 2.4).fill(PAL.ember);
+    eg.circle(x + 11 * face, top + 20, 1.8).fill(PAL.ember);
 
     // arm + flintlock towards the aim
     const ax = Math.cos(p.facing);
@@ -455,9 +571,10 @@ export class GameRenderer {
     // head: morion helmet (halberdier) or wide hat (arquebusier)
     g.circle(x + 2 * face, top + 12, 11).fill(flash ? 0xffffff : minion ? PAL.minion : 0x8a6e58).stroke({ width: 4, color: PAL.ink });
     if (minion) {
-      g.circle(x + 6 * face, top + 12, 7).fill({ color: PAL.ember, alpha: 0.25 });
-      g.circle(x + 3 * face, top + 11, 2).fill(PAL.ember);
-      g.circle(x + 9 * face, top + 11, 1.6).fill(PAL.ember);
+      const eg = this.glowG;
+      eg.circle(x + 6 * face, top + 12, 8).fill({ color: PAL.ember, alpha: 0.22 });
+      eg.circle(x + 3 * face, top + 11, 2).fill(PAL.ember);
+      eg.circle(x + 9 * face, top + 11, 1.6).fill(PAL.ember);
     }
     if (e.kind === "halberdier") {
       g.poly([x - 18, top + 6, x - 8, top - 6, x + 10, top - 8, x + 20, top + 4, x + 2, top + 2]).fill(PAL.steel).stroke({ width: 4, color: PAL.ink });
@@ -589,9 +706,17 @@ export class GameRenderer {
     const w = p.weapon;
     const status = w.reloadLeft > 0 ? "ładuje…" : `${w.loaded}/${w.capacity}`;
     const minions = world.minions.length;
+    let stealth = "";
+    if (world.dark && p.alive) {
+      const lit = world.isLit(p.pos, false);
+      const seen = world.alarm ? "wykryty" : "ukryty";
+      const burning = world.exposure > CONFIG.darkness.burnDelay * 0.5 ? "  ·  światło parzy!" : "";
+      stealth = `\n${lit ? "W ŚWIETLE" : "w mroku"}  ·  ${seen}${burning}`;
+    }
     this.hudText.text =
       `${w.name}  ·  ${status}\n` +
       `Dusze: ${p.souls}   Sługi: ${minions}/${CONFIG.necro.minionLimit}   Strażników: ${world.enemies.length}` +
+      stealth +
       (this.failTime > 0 ? `\n${this.failText}` : "");
 
     if (!started) this.bannerText.text = "PROFANUM\nKliknij, aby zacząć";
