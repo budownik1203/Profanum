@@ -32,6 +32,12 @@ export const PAL = {
   bloodDark: 0x350605,
   smoke: 0x8a8278,
 
+  iron: 0x3a3632, // candelabra, chandelier, torch brackets
+  wax: 0xe8dcc0,
+  /** Stained glass of the Church of the Holy Flame. */
+  glass: [0xb8321e, 0x2a4f8c, 0xd8a83a, 0x6e2a7a] as const,
+  holy: 0xf4e2a8,
+
   enemyBullet: 0xf2e2b0,
   playerBullet: 0xff8a3a,
   telegraph: 0xc8321e,

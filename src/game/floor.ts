@@ -202,18 +202,33 @@ function spreadAround(at: Vec, i: number, side: Side): Vec {
   return vec(at.x + back * 0.4 - 30, at.y + along);
 }
 
-/** Keep pews out of doorways and guards out of the arrival zone, whatever the layout says. */
+/**
+ * Keep pews out of doorways, guards out of the arrival zone and light off the threshold,
+ * whatever the layout says: every door opens into a pocket of shadow to start the fight from.
+ */
 function keepDoorwaysClear(w: World): void {
   const zones = w.doors.map((d) => w.doorCenter(d.side));
   const nearDoor = (p: Vec, r: number) => zones.some((z) => Math.hypot(p.x - z.x, p.y - z.y) < r);
   w.covers = w.covers.filter((c) => !nearDoor({ x: c.x + c.w / 2, y: c.y + c.h / 2 }, 260));
+  const arrivals = w.doors.map((d) => w.arrivalPoint(d.side));
+  const shadow = CONFIG.darkness.doorShadow;
+  for (const l of w.lights) {
+    if (l.owner !== undefined) continue; // lanterns walk where they like
+    for (const a of arrivals) {
+      const d = Math.hypot(l.pos.x - a.x, l.pos.y - a.y);
+      if (d < l.radius + shadow) l.radius = l.baseRadius = Math.max(0, d - shadow);
+    }
+  }
+  // a light squeezed this small is not worth keeping
+  w.lights = w.lights.filter((l) => l.owner !== undefined || l.radius >= 90);
   for (const u of w.units) {
     if (u.team !== "enemy") continue;
     for (const z of zones) {
       const dx = u.pos.x - z.x;
       const dy = u.pos.y - z.y;
       const d = Math.hypot(dx, dy);
-      const min = 360;
+      // lantern-bearers stay farther off, so their light doesn't spill onto the threshold
+      const min = u.lantern ? 420 : 360;
       if (d < min) {
         // push the guard deeper into the room, away from the doorway
         const cx = CONFIG.room.width / 2;
@@ -225,5 +240,10 @@ function keepDoorwaysClear(w: World): void {
         if (u.route.length) u.route = u.route.map((p) => (nearDoor(p, min) ? vec(p.x + (tx / tl) * 120, p.y + (ty / tl) * 120) : p));
       }
     }
+  }
+  // lanterns go where their (possibly moved) bearers stand
+  for (const l of w.lights) {
+    const u = l.owner !== undefined ? w.units.find((x) => x.id === l.owner) : undefined;
+    if (u) l.pos = { x: u.pos.x, y: u.pos.y - 10 };
   }
 }

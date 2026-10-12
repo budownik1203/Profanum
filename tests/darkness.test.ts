@@ -78,7 +78,7 @@ test("a candle can be shot out without waking distant guards", () => {
   w.spawn("halberdier", vec(200, 150), "enemy", { state: "idle" });
   const candle = w.addLight("candle", vec(p.pos.x, p.pos.y - 400));
   const ev = step(w, { ...idleInput(candle.pos), shoot: true }, 0.5);
-  assert.ok(ev.some((e) => e.type === "candleOut"));
+  assert.ok(ev.some((e) => e.type === "lightOut"));
   assert.equal(candle.on, false);
   assert.equal(w.alarm, false, "the muzzle flash was too far to be seen");
 });
@@ -104,13 +104,22 @@ test("the necromancer hits softer in light", () => {
   assert.equal(g.hp, CONFIG.halberdier.hp - CONFIG.flintlock.damage * CONFIG.darkness.lightDamageMul);
 });
 
-test("light burns the necromancer if he lingers in it", () => {
+test("holy light from stained glass burns the necromancer if he lingers in it", () => {
   const w = darkRoom();
   w.alarm = true;
-  w.addLight("candle", w.player.pos);
+  w.addLight("window", w.player.pos, { wall: "N" });
   const ev = step(w, idleInput(), CONFIG.darkness.burnDelay + 0.5);
   assert.ok(ev.some((e) => e.type === "burn"));
   assert.equal(w.player.halves, CONFIG.player.maxHalves - 1);
+});
+
+test("ordinary light only reveals: candles and chandeliers don't burn", () => {
+  const w = darkRoom();
+  w.alarm = true;
+  w.addLight("chandelier", w.player.pos);
+  const ev = step(w, idleInput(), CONFIG.darkness.burnDelay + 4);
+  assert.ok(!ev.some((e) => e.type === "burn"));
+  assert.equal(w.player.halves, CONFIG.player.maxHalves);
 });
 
 test("minions last longer in the dark and crumble faster in light", () => {
@@ -118,16 +127,15 @@ test("minions last longer in the dark and crumble faster in light", () => {
   w.alarm = true;
   const inDark = w.spawn("halberdier", vec(300, 300), "minion");
   const inLight = w.spawn("halberdier", vec(1500, 300), "minion");
-  w.addLight("candle", vec(1500, 300));
-  w.order = { pos: vec(300, 300), time: 0 }; // irrelevant, they have no enemies
+  w.addLight("chandelier", vec(1500, 300));
   inDark.state = "recover";
   inLight.state = "recover";
   const before = CONFIG.necro.minionLifetime;
-  // keep them in place: no enemies, follow distance would pull them, so pin the player between
-  w.player.pos = vec(900, 300);
+  // no enemies: both walk to the necromancer, who stands next to the lit one; the other stays in the dark for 2 s
+  w.player.pos = vec(1450, 300);
   step(w, idleInput(), 2);
   assert.ok(before - inDark.lifetime < 1.5, "dark: about 0.5 s lost per second");
-  assert.ok(before - inLight.lifetime > 2.5 || !inLight.alive, "light: about 2 s lost per second");
+  assert.ok(before - inLight.lifetime > 2.5 || !inLight.alive, "light: about 1.5 s lost per second");
 });
 
 test("a patrolling guard walks its route with a lantern", () => {

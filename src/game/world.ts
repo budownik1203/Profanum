@@ -14,6 +14,7 @@ import {
   circleHitsRect,
   clamp,
   dist,
+  distToSegment,
   fromAngle,
   len,
   norm,
@@ -113,6 +114,11 @@ export interface Unit {
   lantern: boolean;
   /** A tougher named guard (the floor's boss for now). */
   elite: boolean;
+  /** Carries a taper and relights what the necromancer put out. */
+  lamplighter: boolean;
+  /** Lamplighter: id of the light he is walking to, and seconds of work left at it. */
+  task?: number;
+  taskTime: number;
   alive: boolean;
 }
 /** Kept for readability: an enemy is a Unit on the "enemy" team. */
@@ -139,7 +145,9 @@ export interface Soul {
 
 export type Faction = "player" | "enemy" | "minion";
 
-export type LightKind = "candle" | "lantern" | "flash";
+export type LightKind = "candle" | "candelabra" | "torch" | "chandelier" | "window" | "lantern" | "flash";
+/** Fixed lights the necromancer can shoot out (and a lamplighter can relight). */
+export const PUTOUT_KINDS: readonly LightKind[] = ["candle", "candelabra", "torch", "chandelier"];
 
 export type Side = "N" | "E" | "S" | "W";
 
@@ -159,9 +167,23 @@ export interface Shrine {
 export interface Light {
   id: number;
   kind: LightKind;
+  /** Centre of the pool of light on the floor (the stand of a candelabra, the spot under a chandelier). */
   pos: Vec;
   radius: number;
+  /** Radius when whole; damage shrinks `radius`, relighting restores it. */
+  baseRadius: number;
   on: boolean;
+  hp: number;
+  maxHp: number;
+  /** Holy light (stained glass) burns the undead necromancer. Ordinary light only reveals him. */
+  holy: boolean;
+  /** Torches and windows hang on a wall. */
+  wall?: Side;
+  /** Chandelier: seconds until it hits the floor; fallen once it has. */
+  falling?: number;
+  fallen?: boolean;
+  /** Window: the glass is shot out. */
+  broken?: boolean;
   /** Lanterns follow the unit that carries them. */
   owner?: number;
   /** Muzzle flashes last a moment. */
@@ -207,7 +229,13 @@ export type GameEvent =
   | { type: "raiseFail"; pos: Vec; reason: "noSouls" | "limit" }
   | { type: "command"; pos: Vec }
   | { type: "alarm"; pos: Vec; by: number }
-  | { type: "candleOut"; pos: Vec; light: number }
+  /** A shot knocked some candles off but the light still burns. */
+  | { type: "lightHit"; pos: Vec; light: number; kind: LightKind }
+  | { type: "lightOut"; pos: Vec; light: number; kind: LightKind }
+  | { type: "chandelierFall"; pos: Vec; light: number }
+  | { type: "chandelierCrash"; pos: Vec; light: number }
+  | { type: "windowBreak"; pos: Vec; light: number }
+  | { type: "relight"; pos: Vec; light: number; by: number }
   | { type: "burn"; pos: Vec }
   | { type: "exit"; door: Door }
   | { type: "shrine"; pos: Vec; halves: number; souls: number }
@@ -323,12 +351,41 @@ export class World {
     return c;
   }
 
-  addLight(kind: LightKind, pos: Vec, owner?: number): Light {
-    const d = CONFIG.darkness;
-    const radius = kind === "candle" ? d.candleRadius : kind === "lantern" ? d.lanternRadius : d.flashRadius;
-    const l: Light = { id: nextId(), kind, pos: { ...pos }, radius, on: true, owner, life: kind === "flash" ? d.flashTime : undefined };
+  addLight(kind: LightKind, pos: Vec, opts: { owner?: number; wall?: Side } = {}): Light {
+    const c = CONFIG.lights[kind];
+    const l: Light = {
+      id: nextId(),
+      kind,
+      pos: { ...pos },
+      radius: c.radius,
+      baseRadius: c.radius,
+      on: true,
+      hp: c.hp,
+      maxHp: c.hp,
+      holy: kind === "window",
+      wall: opts.wall,
+      owner: opts.owner,
+      life: kind === "flash" ? CONFIG.darkness.flashTime : undefined,
+    };
     this.lights.push(l);
     return l;
+  }
+
+  /** Where a bullet has to pass to hit this light: the flame, the chandelier's frame up on its chain. */
+  static hitPoint(l: Light): Vec {
+    return { x: l.pos.x, y: l.pos.y - CONFIG.lights[l.kind].lift };
+  }
+
+  /** Where a stained-glass window sits in its wall (its pool of light lies on the floor below). */
+  windowPoint(l: Light): Vec {
+    const half = CONFIG.room.wall / 2;
+    const { w, h } = this.room;
+    switch (l.wall ?? "N") {
+      case "N": return vec(l.pos.x, half);
+      case "S": return vec(l.pos.x, h - half);
+      case "W": return vec(half, l.pos.y);
+      default: return vec(w - half, l.pos.y);
+    }
   }
 
   /** 1 inside the bright core of a light, 0.5 in its outer band, 0 in darkness. */
@@ -337,10 +394,15 @@ export class World {
     for (const l of this.lights) {
       if (!l.on || (!includeFlash && l.kind === "flash")) continue;
       const d = dist(p, l.pos);
-      if (d < l.radius * 0.6) return 1;
+      if (d < l.radius * 0.7) return 1;
       if (d < l.radius) v = 0.5;
     }
     return v;
+  }
+
+  /** Standing in holy light (an unbroken stained-glass window). */
+  isHoly(p: Vec): boolean {
+    return this.lights.some((l) => l.on && l.holy && dist(p, l.pos) < l.radius);
   }
 
   /** Standing inside any light's radius. */
@@ -360,7 +422,7 @@ export class World {
     kind: UnitKind,
     pos: Vec,
     team: Team = "enemy",
-    opts: { state?: "idle" | "patrol"; route?: Vec[]; lantern?: boolean } = {},
+    opts: { state?: "idle" | "patrol"; route?: Vec[]; lantern?: boolean; lamplighter?: boolean } = {},
   ): Unit {
     const cfg = statsOf(kind);
     const u: Unit = {
@@ -381,14 +443,17 @@ export class World {
       raises: 0,
       route: opts.route ?? [],
       routeIdx: 0,
-      lantern: opts.lantern ?? false,
+      // a lamplighter always carries a light of his own: you can see him coming
+      lantern: (opts.lantern || opts.lamplighter) ?? false,
       elite: false,
+      lamplighter: (opts.lamplighter && team === "enemy") ?? false,
+      taskTime: 0,
       alive: true,
     };
     if (opts.state && team === "enemy") u.state = opts.state;
     if (team === "enemy") this.hadEnemies = true;
     this.units.push(u);
-    if (u.lantern) this.addLight("lantern", u.pos, u.id);
+    if (u.lantern) this.addLight("lantern", u.pos, { owner: u.id });
     return u;
   }
 
@@ -458,12 +523,16 @@ export class World {
     return side === "N" ? vec(w / 2, 0) : side === "S" ? vec(w / 2, h) : side === "W" ? vec(0, h / 2) : vec(w, h / 2);
   }
 
-  /** Put the player just inside the given doorway (arriving from the neighbouring room). */
-  placeAtDoor(side: Side): Vec {
+  /** Where the necromancer stands right after walking in through this doorway. */
+  arrivalPoint(side: Side): Vec {
     const c = this.doorCenter(side);
     const inset = CONFIG.room.wall + CONFIG.player.radius + 46;
-    const pos =
-      side === "N" ? vec(c.x, inset) : side === "S" ? vec(c.x, this.room.h - inset) : side === "W" ? vec(inset, c.y) : vec(this.room.w - inset, c.y);
+    return side === "N" ? vec(c.x, inset) : side === "S" ? vec(c.x, this.room.h - inset) : side === "W" ? vec(inset, c.y) : vec(this.room.w - inset, c.y);
+  }
+
+  /** Put the player just inside the given doorway (arriving from the neighbouring room). */
+  placeAtDoor(side: Side): Vec {
+    const pos = this.arrivalPoint(side);
     this.player.pos = pos;
     this.player.push = vec();
     this.exited = false;
@@ -588,10 +657,7 @@ export class World {
         best.flipped = true;
         const at = { x: best.x + best.w / 2, y: best.y + best.h / 2 };
         this.events.push({ type: "coverFlip", cover: best.id, pos: at });
-        if (!this.alarm) {
-          const woken = this.enemies.find((e) => dist(e.pos, at) < CONFIG.darkness.noiseRadius);
-          if (woken) this.raiseAlarm(woken);
-        }
+        this.makeNoise(at);
       }
     }
 
@@ -679,6 +745,7 @@ export class World {
   private updateUnit(u: Unit, dt: number): void {
     u.flash = Math.max(0, u.flash - dt);
     u.timer -= dt;
+    if (u.team === "enemy" && u.lamplighter && this.tendLights(u, dt)) return;
     if (u.team === "enemy" && (u.state === "idle" || u.state === "patrol")) {
       this.updateUnaware(u, dt);
       return;
@@ -879,9 +946,31 @@ export class World {
       b.pos = to;
       b.life -= dt;
 
+      if (b.from === "player") {
+        // candles, candelabra, torches and the chandelier's frame can be shot out
+        const target = this.lights.find(
+          (l) => l.on && l.hp > 0 && l.falling === undefined && PUTOUT_KINDS.includes(l.kind) && distToSegment(World.hitPoint(l), from, to) < CONFIG.lights[l.kind].hit + b.radius,
+        );
+        if (target) {
+          this.shootLight(target);
+          b.life = 0;
+          continue;
+        }
+      }
       if (to.x < W.x + wall || to.y < W.y + wall || to.x > W.x + W.w - wall || to.y > W.y + W.h - wall) {
         b.life = 0;
-        this.events.push({ type: "bulletWall", pos: { x: clamp(to.x, wall, W.w - wall), y: clamp(to.y, wall, W.h - wall) } });
+        const at = { x: clamp(to.x, wall, W.w - wall), y: clamp(to.y, wall, W.h - wall) };
+        this.events.push({ type: "bulletWall", pos: at });
+        if (b.from === "player") {
+          const side: Side = to.y < W.y + wall ? "N" : to.y > W.y + W.h - wall ? "S" : to.x < W.x + wall ? "W" : "E";
+          const glass = this.lights.find((l) => {
+            if (l.kind !== "window" || l.broken || (l.wall ?? "N") !== side) return false;
+            const wp = this.windowPoint(l);
+            const along = side === "N" || side === "S" ? Math.abs(at.x - wp.x) : Math.abs(at.y - wp.y);
+            return along < CONFIG.window.width / 2;
+          });
+          if (glass) this.breakWindow(glass);
+        }
         continue;
       }
       // toppled cover stops bullets from both sides
@@ -902,15 +991,6 @@ export class World {
         continue;
       }
       const dir = norm(b.vel);
-      if (b.from === "player") {
-        const candle = this.lights.find((l) => l.kind === "candle" && l.on && dist(l.pos, to) < CONFIG.darkness.candleHitRadius + b.radius);
-        if (candle) {
-          candle.on = false;
-          b.life = 0;
-          this.events.push({ type: "candleOut", pos: { ...candle.pos }, light: candle.id });
-          continue;
-        }
-      }
       // the player's and the minions' bullets hit guards; guards' bullets hit the player and minions
       const hostileTeam: Team = b.from === "enemy" ? "minion" : "enemy";
       for (const u of this.units) {
@@ -946,8 +1026,123 @@ export class World {
         if (u) l.pos = { x: u.pos.x + u.dir.x * 18, y: u.pos.y - 10 };
       }
       if (l.life !== undefined) l.life -= dt;
+      if (l.falling !== undefined) {
+        l.falling -= dt;
+        if (l.falling <= 0) this.crashChandelier(l);
+      }
     }
     this.lights = this.lights.filter((l) => l.life === undefined || l.life > 0);
+  }
+
+  /** A player bullet reached a light's hitbox. */
+  private shootLight(l: Light): void {
+    const at = World.hitPoint(l);
+    l.hp -= 1;
+    if (l.hp > 0) {
+      // some candles knocked off: the pool of light shrinks
+      l.radius = l.baseRadius * (CONFIG.lightDamagedRadius + (1 - CONFIG.lightDamagedRadius) * ((l.hp - 1) / Math.max(1, l.maxHp - 1)));
+      this.events.push({ type: "lightHit", pos: at, light: l.id, kind: l.kind });
+      return;
+    }
+    if (l.kind === "chandelier") {
+      // the chain snaps: the whole thing comes down a moment later
+      l.falling = CONFIG.chandelier.fallTime;
+      this.events.push({ type: "chandelierFall", pos: at, light: l.id });
+      return;
+    }
+    l.on = false;
+    this.events.push({ type: "lightOut", pos: at, light: l.id, kind: l.kind });
+  }
+
+  /** Tons of iron and burning wax hit the floor: everything under it is crushed, the middle goes dark. */
+  private crashChandelier(l: Light): void {
+    const c = CONFIG.chandelier;
+    l.falling = undefined;
+    l.fallen = true;
+    l.on = false;
+    this.events.push({ type: "chandelierCrash", pos: { ...l.pos }, light: l.id });
+    const ambush = !this.alarm;
+    for (const u of this.units) {
+      if (!u.alive || dist(u.pos, l.pos) > c.crushRadius + u.radius) continue;
+      this.hurtUnit(u, c.crushDamage, norm(sub(u.pos, l.pos)), ambush && u.team === "enemy");
+    }
+    if (this.player.alive && dist(this.player.pos, l.pos) < c.crushRadius + CONFIG.player.radius) {
+      this.hurtPlayer(1, norm(sub(this.player.pos, l.pos)));
+    }
+    this.makeNoise(l.pos);
+  }
+
+  /** A shot through stained glass: shards rain on whoever stands in its light, the light stops being holy. */
+  private breakWindow(l: Light): void {
+    l.broken = true;
+    l.holy = false;
+    l.radius = l.baseRadius * CONFIG.window.brokenRadiusMul;
+    this.events.push({ type: "windowBreak", pos: this.windowPoint(l), light: l.id });
+    const ambush = !this.alarm;
+    for (const u of this.units) {
+      if (!u.alive || u.team !== "enemy" || dist(u.pos, l.pos) > l.baseRadius) continue;
+      this.hurtUnit(u, CONFIG.window.shardDamage, vec(0, 1), ambush);
+    }
+    this.makeNoise(this.windowPoint(l));
+  }
+
+  /** Something loud happened: a guard within earshot raises the alarm. */
+  private makeNoise(at: Vec): void {
+    if (this.alarm) return;
+    const woken = this.enemies.find((e) => e.alive && dist(e.pos, at) < CONFIG.darkness.noiseRadius);
+    if (woken) this.raiseAlarm(woken);
+  }
+
+  /** Can a lamplighter bring this light back? */
+  private relightable(l: Light): boolean {
+    return !l.on && PUTOUT_KINDS.includes(l.kind) && !l.fallen && l.falling === undefined;
+  }
+
+  /**
+   * A lamplighter walks to the nearest light that was put out and relights it,
+   * before the alarm and during the fight alike. Returns true if he spent this step on it.
+   */
+  private tendLights(u: Unit, dt: number): boolean {
+    const lc = CONFIG.lamplighter;
+    const aware = !(u.state === "idle" || u.state === "patrol");
+    // never drops an attack halfway, and fights back if the necromancer is in his face
+    if (u.state === "windup" || u.state === "charge" || u.state === "aim") return false;
+    if (aware && this.player.alive && dist(u.pos, this.player.pos) < 160) return false;
+    let l = u.task !== undefined ? this.lights.find((x) => x.id === u.task) : undefined;
+    if (!l || !this.relightable(l)) {
+      l = undefined;
+      u.task = undefined;
+      let best: number = lc.range;
+      for (const x of this.lights) {
+        if (!this.relightable(x)) continue;
+        // two lamplighters don't go for the same candle
+        if (this.units.some((o) => o !== u && o.alive && o.task === x.id)) continue;
+        const d = dist(u.pos, x.pos);
+        if (d < best) {
+          best = d;
+          l = x;
+        }
+      }
+      if (!l) return false;
+      u.task = l.id;
+      u.taskTime = lc.relightTime;
+    }
+    if (dist(u.pos, l.pos) > lc.reach) {
+      u.dir = norm(sub(l.pos, u.pos));
+      const speed = statsOf(u.kind).speed * (aware ? 1.1 : CONFIG.darkness.patrolSpeedMul * 1.4);
+      this.moveUnit(u, scale(u.dir, speed), dt);
+      return true;
+    }
+    this.moveUnit(u, vec(), dt);
+    u.taskTime -= dt;
+    if (u.taskTime <= 0) {
+      l.on = true;
+      l.hp = l.maxHp;
+      l.radius = l.baseRadius;
+      u.task = undefined;
+      this.events.push({ type: "relight", pos: World.hitPoint(l), light: l.id, by: u.id });
+    }
+    return true;
   }
 
   /** Does this guard notice the necromancer or one of his minions? */
@@ -983,10 +1178,10 @@ export class World {
     }
   }
 
-  /** Light burns the undead necromancer if he lingers in it. */
+  /** Holy light (stained glass) burns the undead necromancer if he lingers in it. */
   private updateBurn(dt: number): void {
     const d = CONFIG.darkness;
-    if (this.isLit(this.player.pos, false)) {
+    if (this.isHoly(this.player.pos)) {
       this.exposure += dt;
       if (this.exposure > d.burnDelay) {
         this.burnTick -= dt;

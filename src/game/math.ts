@@ -29,6 +29,15 @@ export interface Rect {
 }
 
 /** Closest point of a rectangle to p. */
+/** Distance from point p to the segment a-b (fast bullets are tested along their whole step). */
+export function distToSegment(p: Vec, a: Vec, b: Vec): number {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const l2 = abx * abx + aby * aby;
+  const t = l2 === 0 ? 0 : clamp(((p.x - a.x) * abx + (p.y - a.y) * aby) / l2, 0, 1);
+  return Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t));
+}
+
 export function closestOnRect(p: Vec, r: Rect): Vec {
   return { x: clamp(p.x, r.x, r.x + r.w), y: clamp(p.y, r.y, r.y + r.h) };
 }

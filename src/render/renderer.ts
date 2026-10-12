@@ -5,7 +5,7 @@
  */
 import { Container, Graphics, RenderTexture, Sprite, Text, Texture, type Renderer } from "pixi.js";
 import { CONFIG } from "../game/config.js";
-import type { Corpse, Cover, Door, GameEvent, Soul, Unit, World } from "../game/world.js";
+import { World, type Corpse, type Cover, type Door, type GameEvent, type Light, type Soul, type Unit } from "../game/world.js";
 import type { Floor } from "../game/floor.js";
 import type { Vec } from "../game/math.js";
 import { PAL } from "../palette.js";
@@ -22,7 +22,7 @@ interface Particle {
   max: number;
   size: number;
   color: number;
-  kind: "smoke" | "blood" | "spark" | "chunk" | "mist" | "splinter";
+  kind: "smoke" | "blood" | "spark" | "chunk" | "mist" | "splinter" | "glass";
 }
 
 const OUT = 5; // ink outline width
@@ -50,6 +50,8 @@ export class GameRenderer {
   /** Every room keeps its own blood-soaked floor. */
   private decalTextures = new Map<number, RenderTexture>();
   private actorsG = new Graphics();
+  /** Things hanging above the actors: the chandelier on its chain. */
+  private overheadG = new Graphics();
   private bulletsG = new Graphics();
   private fxG = new Graphics();
   private hudG = new Graphics();
@@ -73,7 +75,7 @@ export class GameRenderer {
     this.decalTextures.set(-1, this.decals);
     this.decalSprite = new Sprite(this.decals);
     this.drawFloor([]);
-    this.camLayer.addChild(this.floor, this.decalSprite, this.corpsesG, this.coversG, this.actorsG);
+    this.camLayer.addChild(this.floor, this.decalSprite, this.corpsesG, this.coversG, this.actorsG, this.overheadG);
     this.glowLayer.addChild(this.glowG, this.soulsG, this.bulletsG, this.fxG);
 
     this.darkCanvas = document.createElement("canvas");
@@ -193,9 +195,44 @@ export class GameRenderer {
           this.floatText(e.pos, "ALARM!", PAL.telegraph, 34);
           this.addShake(10);
           break;
-        case "candleOut":
-          for (let i = 0; i < 10; i++) this.spawn(e.pos, rnd(-30, 30), rnd(-90, -30), rnd(0.6, 1.2), rnd(4, 9), PAL.smoke, "smoke");
-          for (let i = 0; i < 6; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-120, 40), rnd(0.15, 0.35), rnd(1.5, 3), PAL.emberHot, "spark");
+        case "lightOut": {
+          const big = e.kind === "candle" ? 1 : 1.8;
+          for (let i = 0; i < 10 * big; i++) this.spawn(e.pos, rnd(-30, 30) * big, rnd(-90, -30), rnd(0.6, 1.2), rnd(4, 9) * big, PAL.smoke, "smoke");
+          for (let i = 0; i < 6 * big; i++) this.spawn(e.pos, rnd(-120, 120) * big, rnd(-120, 40), rnd(0.15, 0.35), rnd(1.5, 3), PAL.emberHot, "spark");
+          this.addShake(2 * big);
+          break;
+        }
+        case "lightHit":
+          // a few candles knocked off the arms: wax and sparks
+          for (let i = 0; i < 8; i++) this.spawn(e.pos, rnd(-160, 160), rnd(-160, 60), rnd(0.15, 0.4), rnd(1.5, 3), PAL.emberHot, "spark");
+          for (let i = 0; i < 5; i++) this.spawn(e.pos, rnd(-30, 30), rnd(-70, -20), rnd(0.5, 1), rnd(4, 8), PAL.smoke, "smoke");
+          this.addShake(2);
+          break;
+        case "chandelierFall":
+          // the chain snaps
+          for (let i = 0; i < 14; i++) this.spawn(e.pos, rnd(-200, 200), rnd(-240, 40), rnd(0.2, 0.5), rnd(1.5, 3.5), PAL.emberHot, "spark");
+          this.floatText(e.pos, "Łańcuch pęka!", PAL.emberHot, 26);
+          this.addShake(5);
+          break;
+        case "chandelierCrash":
+          for (let i = 0; i < 40; i++) this.spawn(e.pos, rnd(-420, 420), rnd(-300, 200), rnd(0.25, 0.7), rnd(1.5, 4), PAL.emberHot, "spark");
+          for (let i = 0; i < 26; i++) this.spawn(e.pos, rnd(-200, 200), rnd(-200, 60), rnd(0.7, 1.4), rnd(10, 22), PAL.smoke, "smoke");
+          for (let i = 0; i < 18; i++) this.spawn(e.pos, rnd(-320, 320), rnd(-200, 200), rnd(0.3, 0.7), rnd(3, 7), PAL.iron, "splinter");
+          // scorch and spilt wax baked into the floor
+          this.splat(e.pos.x, e.pos.y, 120, 0x15100c);
+          for (let i = 0; i < 9; i++) this.splat(e.pos.x + rnd(-150, 150), e.pos.y + rnd(-90, 90), rnd(6, 14), PAL.wax);
+          this.addShake(24);
+          break;
+        case "windowBreak":
+          // coloured glass rains down onto the pool of light below
+          for (let i = 0; i < 46; i++) {
+            this.spawn(e.pos, rnd(-150, 150), rnd(120, 520), rnd(0.35, 0.8), rnd(2, 5), PAL.glass[i % PAL.glass.length], "glass");
+          }
+          this.floatText({ x: e.pos.x, y: e.pos.y + 120 }, "Witraż pęka!", PAL.holy, 26);
+          this.addShake(8);
+          break;
+        case "relight":
+          for (let i = 0; i < 10; i++) this.spawn(e.pos, rnd(-60, 60), rnd(-120, -20), rnd(0.2, 0.5), rnd(1.5, 3), PAL.ember, "spark");
           break;
         case "burn":
           for (let i = 0; i < 14; i++) this.spawn(e.pos, rnd(-50, 50), rnd(-140, -40), rnd(0.5, 1), rnd(6, 12), PAL.smoke, "smoke");
@@ -299,6 +336,7 @@ export class GameRenderer {
     this.drawCovers(world.covers, world);
     this.drawCorpses(world);
     this.drawActors(world);
+    this.drawOverhead(world);
     this.drawSouls(world.souls, world.time);
     this.drawOrder(world);
     this.drawBullets(world);
@@ -459,12 +497,7 @@ export class GameRenderer {
         }
       }
     }
-    for (const l of world?.lights ?? []) {
-      if (l.kind !== "candle") continue;
-      g.ellipse(l.pos.x, l.pos.y + 22, 18, 6).fill({ color: PAL.ink, alpha: 0.6 });
-      g.rect(l.pos.x - 10, l.pos.y + 14, 20, 8).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
-      g.rect(l.pos.x - 4, l.pos.y - 6, 8, 22).fill(0xe8dcc0).stroke({ width: 3, color: PAL.ink });
-    }
+    if (world) for (const l of world.lights) this.drawFixture(g, l, world);
     for (const c of covers) {
       if (c.broken) continue;
       if (!c.flipped) {
@@ -492,19 +525,201 @@ export class GameRenderer {
     }
   }
 
-  /** Candle flames and lanterns glow above the darkness. */
+  /** Stands, brackets, windows and wrecks: drawn on the floor layer, under the darkness. */
+  private drawFixture(g: Graphics, l: Light, world: World): void {
+    const { x, y } = l.pos;
+    const ink = { width: 3, color: PAL.ink };
+    switch (l.kind) {
+      case "candle":
+        g.ellipse(x, y + 22, 18, 6).fill({ color: PAL.ink, alpha: 0.6 });
+        g.rect(x - 10, y + 14, 20, 8).fill(PAL.steel).stroke(ink);
+        g.rect(x - 4, y - 6, 8, 22).fill(PAL.wax).stroke(ink);
+        break;
+      case "candelabra": {
+        // a tall iron stand with five arms; shot candles are gone from the arms
+        g.ellipse(x, y + 6, 30, 9).fill({ color: PAL.ink, alpha: 0.6 });
+        g.poly([x - 22, y + 6, x, y - 8, x + 22, y + 6]).stroke({ width: 7, color: PAL.ink, join: "round" });
+        g.poly([x - 22, y + 6, x, y - 8, x + 22, y + 6]).stroke({ width: 3, color: PAL.iron, join: "round" });
+        g.moveTo(x, y + 4).lineTo(x, y - 30).stroke({ width: 8, color: PAL.ink });
+        g.moveTo(x, y + 4).lineTo(x, y - 30).stroke({ width: 4, color: PAL.iron });
+        g.moveTo(x - 24, y - 26).quadraticCurveTo(x, y - 14, x + 24, y - 26).stroke({ width: 7, color: PAL.ink });
+        g.moveTo(x - 24, y - 26).quadraticCurveTo(x, y - 14, x + 24, y - 26).stroke({ width: 3, color: PAL.iron });
+        for (const [dx, i] of CANDELABRA_ARMS) {
+          const lit = l.on && (l.hp >= l.maxHp || i < 2);
+          const h = lit ? 12 : 5;
+          g.rect(x + dx - 3, y - 30 - h + (dx === 0 ? -6 : 0), 6, h).fill(PAL.wax).stroke({ width: 2, color: PAL.ink });
+        }
+        break;
+      }
+      case "torch": {
+        // an iron bracket from the wall face to the torch head
+        const head = World.hitPoint(l);
+        const wallAt = wallFace(l, head);
+        g.moveTo(wallAt.x, wallAt.y).lineTo(head.x, head.y + 8).stroke({ width: 8, color: PAL.ink, cap: "round" });
+        g.moveTo(wallAt.x, wallAt.y).lineTo(head.x, head.y + 8).stroke({ width: 4, color: PAL.iron, cap: "round" });
+        g.moveTo(head.x, head.y + 18).lineTo(head.x, head.y).stroke({ width: 9, color: PAL.ink, cap: "round" });
+        g.moveTo(head.x, head.y + 18).lineTo(head.x, head.y).stroke({ width: 5, color: PAL.wood, cap: "round" });
+        g.ellipse(head.x, head.y, 7, 5).fill(l.on ? 0x2a1a10 : 0x1a1410).stroke(ink);
+        break;
+      }
+      case "window": {
+        // the glass in the wall
+        const wp = world.windowPoint(l);
+        const along = l.wall === "N" || l.wall === "S" || l.wall === undefined;
+        const half = CONFIG.window.width / 2;
+        const thick = CONFIG.room.wall - 14;
+        const r = along ? { x: wp.x - half, y: wp.y - thick / 2, w: half * 2, h: thick } : { x: wp.x - thick / 2, y: wp.y - half, w: thick, h: half * 2 };
+        g.rect(r.x - 4, r.y - 4, r.w + 8, r.h + 8).fill(PAL.wallTop).stroke({ width: 4, color: PAL.ink });
+        if (l.broken) {
+          g.rect(r.x, r.y, r.w, r.h).fill(0x0c0e14);
+          for (let i = 0; i < 6; i++) {
+            const t = (i + 0.5) / 6;
+            const px = along ? r.x + r.w * t : r.x;
+            const py = along ? r.y : r.y + r.h * t;
+            g.poly(along ? [px - 8, py, px + 8, py, px + 2, py + 10 + (i % 3) * 5] : [px, py - 8, px, py + 8, px + 10 + (i % 3) * 5, py + 2])
+              .fill({ color: PAL.glass[i % PAL.glass.length], alpha: 0.8 });
+          }
+        } else {
+          const panes = 5;
+          for (let i = 0; i < panes; i++) {
+            const c = PAL.glass[(i + l.id) % PAL.glass.length];
+            if (along) g.rect(r.x + (r.w / panes) * i, r.y, r.w / panes, r.h).fill(c);
+            else g.rect(r.x, r.y + (r.h / panes) * i, r.w, r.h / panes).fill(c);
+          }
+          // lead lines
+          for (let i = 1; i < panes; i++) {
+            if (along) g.moveTo(r.x + (r.w / panes) * i, r.y).lineTo(r.x + (r.w / panes) * i, r.y + r.h).stroke({ width: 3, color: PAL.ink });
+            else g.moveTo(r.x, r.y + (r.h / panes) * i).lineTo(r.x + r.w, r.y + (r.h / panes) * i).stroke({ width: 3, color: PAL.ink });
+          }
+          g.rect(r.x, r.y, r.w, r.h).stroke({ width: 3, color: PAL.ink });
+        }
+        // the coloured patch the window throws on the floor
+        if (l.on) {
+          if (l.holy) {
+            for (let i = 0; i < 3; i++) {
+              g.ellipse(x + (i - 1) * l.radius * 0.28, y, l.radius * 0.3, l.radius * 0.55).fill({ color: PAL.glass[(i + l.id) % PAL.glass.length], alpha: 0.13 });
+            }
+            g.ellipse(x, y, l.radius * 0.62, l.radius * 0.5).stroke({ width: 3, color: PAL.holy, alpha: 0.25 });
+          } else {
+            g.ellipse(x, y, l.radius * 0.6, l.radius * 0.5).fill({ color: 0x9fb4d8, alpha: 0.08 });
+          }
+        }
+        break;
+      }
+      case "chandelier":
+        if (l.fallen) {
+          // the wreck: a bent iron ring, candles scattered around it
+          g.ellipse(x, y + 4, 92, 30).fill({ color: PAL.ink, alpha: 0.6 });
+          g.ellipse(x, y, 80, 24).stroke({ width: 10, color: PAL.ink });
+          g.ellipse(x, y, 80, 24).stroke({ width: 5, color: PAL.iron });
+          g.moveTo(x - 60, y - 6).lineTo(x + 20, y + 30).stroke({ width: 6, color: PAL.ink });
+          g.moveTo(x + 50, y - 16).lineTo(x - 10, y + 22).stroke({ width: 6, color: PAL.ink });
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + l.id;
+            const r = 96 + (i % 3) * 22;
+            g.rect(x + Math.cos(a) * r - 7, y + Math.sin(a) * r * 0.45 - 3, 14, 6).fill(PAL.wax).stroke({ width: 2, color: PAL.ink });
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** The hanging chandelier: drawn above the actors, falling once its chain snaps. */
+  private drawOverhead(world: World): void {
+    const g = this.overheadG;
+    g.clear();
+    for (const l of world.lights) {
+      if (l.kind !== "chandelier" || l.fallen) continue;
+      const hang = World.hitPoint(l);
+      let fy = hang.y;
+      if (l.falling !== undefined) {
+        const t = 1 - Math.max(0, l.falling) / CONFIG.chandelier.fallTime;
+        fy = hang.y + (l.pos.y - hang.y) * t * t;
+        // its shadow grows on the floor as it comes down
+        g.ellipse(l.pos.x, l.pos.y, 60 + 40 * t, 18 + 12 * t).fill({ color: PAL.ink, alpha: 0.25 + 0.4 * t });
+      } else {
+        // the chain up into the dark vault
+        g.moveTo(hang.x, fy - 26).lineTo(hang.x, fy - 420).stroke({ width: 7, color: PAL.ink });
+        g.moveTo(hang.x, fy - 26).lineTo(hang.x, fy - 420).stroke({ width: 3, color: PAL.iron });
+      }
+      const x = hang.x;
+      const sway = l.falling === undefined ? Math.sin(world.time * 1.3 + l.id) * 2 : 0;
+      // the ring and its spokes
+      g.moveTo(x, fy - 26).lineTo(x - 70 + sway, fy).stroke({ width: 4, color: PAL.ink });
+      g.moveTo(x, fy - 26).lineTo(x + 70 + sway, fy).stroke({ width: 4, color: PAL.ink });
+      g.ellipse(x + sway, fy, 72, 18).stroke({ width: 10, color: PAL.ink });
+      g.ellipse(x + sway, fy, 72, 18).stroke({ width: 5, color: PAL.iron });
+      g.circle(x, fy - 26, 8).fill(PAL.iron).stroke({ width: 3, color: PAL.ink });
+      const n = l.hp >= l.maxHp ? CHANDELIER_CANDLES : Math.ceil(CHANDELIER_CANDLES / 2);
+      for (let i = 0; i < n; i++) {
+        const a = (i / CHANDELIER_CANDLES) * Math.PI * 2;
+        g.rect(x + sway + Math.cos(a) * 72 - 4, fy + Math.sin(a) * 18 - 16, 8, 16).fill(PAL.wax).stroke({ width: 2, color: PAL.ink });
+      }
+    }
+  }
+
+  /** Flames glow above the darkness. */
   private drawLights(world: World): void {
     const g = this.glowG;
+    const flame = (x: number, y: number, size: number, flick: number) => {
+      g.circle(x, y - 4 * size, 12 * size).fill({ color: PAL.ember, alpha: 0.22 });
+      g.poly([x - 4 * size, y, x, y - 14 * size - flick, x + 4 * size, y]).fill(PAL.emberHot);
+    };
     for (const l of world.lights) {
-      if (l.kind === "flash") continue;
+      if (l.kind === "flash" || !l.on) continue;
       const flick = Math.sin(world.time * 13 + l.id * 3) * 1.5;
-      if (l.kind === "candle") {
-        if (!l.on) continue;
-        g.circle(l.pos.x, l.pos.y - 12, 14).fill({ color: PAL.ember, alpha: 0.25 });
-        g.poly([l.pos.x - 4, l.pos.y - 8, l.pos.x, l.pos.y - 22 - flick, l.pos.x + 4, l.pos.y - 8]).fill(PAL.emberHot);
-      } else {
-        g.circle(l.pos.x, l.pos.y, 16).fill({ color: PAL.ember, alpha: 0.3 });
-        g.rect(l.pos.x - 6, l.pos.y - 9, 12, 16).fill(PAL.emberHot).stroke({ width: 3, color: PAL.ink });
+      const { x, y } = l.pos;
+      switch (l.kind) {
+        case "candle":
+          flame(x, y - 8, 1, flick);
+          break;
+        case "candelabra":
+          for (const [dx, i] of CANDELABRA_ARMS) {
+            if (l.hp < l.maxHp && i >= 2) continue;
+            flame(x + dx, y - 42 + (dx === 0 ? -6 : 0), 0.85, flick * (i % 2 ? -1 : 1));
+          }
+          break;
+        case "torch": {
+          const h = World.hitPoint(l);
+          g.circle(h.x, h.y - 10, 26).fill({ color: PAL.ember, alpha: 0.18 });
+          flame(h.x - 3, h.y - 2, 1.5, flick * 2);
+          flame(h.x + 4, h.y - 1, 1.1, -flick * 2);
+          break;
+        }
+        case "chandelier": {
+          if (l.falling !== undefined) break; // the candles gutter as it falls
+          const h = World.hitPoint(l);
+          const sway = Math.sin(world.time * 1.3 + l.id) * 2;
+          const n = l.hp >= l.maxHp ? CHANDELIER_CANDLES : Math.ceil(CHANDELIER_CANDLES / 2);
+          for (let i = 0; i < n; i++) {
+            const a = (i / CHANDELIER_CANDLES) * Math.PI * 2;
+            flame(h.x + sway + Math.cos(a) * 72, h.y + Math.sin(a) * 18 - 16, 0.8, flick * (i % 2 ? -1 : 1));
+          }
+          break;
+        }
+        case "window":
+          if (l.holy) {
+            // a shaft of holy light from the glass down to the floor
+            const wp = world.windowPoint(l);
+            const w = CONFIG.window.width / 2;
+            const vertical = l.wall === "N" || l.wall === "S" || l.wall === undefined;
+            const pts = vertical
+              ? [wp.x - w, wp.y, wp.x + w, wp.y, x + l.radius * 0.6, y, x - l.radius * 0.6, y]
+              : [wp.x, wp.y - w, wp.x, wp.y + w, x, y + l.radius * 0.5, x, y - l.radius * 0.5];
+            g.poly(pts).fill({ color: PAL.holy, alpha: 0.05 + 0.015 * Math.sin(world.time * 0.8 + l.id) });
+          }
+          break;
+        case "lantern": {
+          const bearer = world.units.find((u) => u.id === l.owner);
+          if (bearer?.lamplighter) break; // the lamplighter's taper is drawn with him
+          g.circle(x, y, 16).fill({ color: PAL.ember, alpha: 0.3 });
+          g.rect(x - 6, y - 9, 12, 16).fill(PAL.emberHot).stroke({ width: 3, color: PAL.ink });
+          break;
+        }
+        default:
+          break;
       }
     }
   }
@@ -531,9 +746,9 @@ export class GameRenderer {
     };
     for (const l of world.lights) {
       if (!l.on) continue;
-      const flick = l.kind === "candle" ? 1 + Math.sin(world.time * 9 + l.id) * 0.02 : 1;
-      hole(l.pos.x, l.pos.y, l.radius * flick, 0.55); // outer band
-      hole(l.pos.x, l.pos.y, l.radius * 0.6 * flick, 1); // hard bright core
+      const flick = l.kind === "window" || l.kind === "flash" ? 1 : 1 + Math.sin(world.time * 9 + l.id) * 0.02;
+      hole(l.pos.x, l.pos.y, l.radius * flick, 0.72); // outer band
+      hole(l.pos.x, l.pos.y, l.radius * 0.7 * flick, 1); // hard bright core
     }
     // the necromancer can always make out his own silhouette, faintly
     if (world.player.alive) hole(world.player.pos.x, world.player.pos.y - 30, 70, 0.4);
@@ -656,6 +871,23 @@ export class GameRenderer {
       eg.circle(x + 3 * face, top + 11, 2).fill(PAL.ember);
       eg.circle(x + 9 * face, top + 11, 1.6).fill(PAL.ember);
     }
+    if (e.lamplighter && !minion) {
+      // a long brass taper over the shoulder, its little flame above the darkness
+      const bx = x - 14 * face;
+      const tip = { x: x - 30 * face, y: top - 34 };
+      g.moveTo(bx, top + 48).lineTo(tip.x, tip.y).stroke({ width: 7, color: PAL.ink, cap: "round" });
+      g.moveTo(bx, top + 48).lineTo(tip.x, tip.y).stroke({ width: 3, color: 0xa8823e, cap: "round" });
+      const eg = this.glowG;
+      eg.circle(tip.x, tip.y - 4, 12).fill({ color: PAL.ember, alpha: 0.25 });
+      eg.poly([tip.x - 3, tip.y, tip.x, tip.y - 12 - Math.sin(world.time * 14 + e.id) * 1.5, tip.x + 3, tip.y]).fill(PAL.emberHot);
+      // relighting: a ring fills up over his head
+      const target = e.task !== undefined ? world.lights.find((l) => l.id === e.task) : undefined;
+      if (target && Math.hypot(target.pos.x - x, target.pos.y - y) <= CONFIG.lamplighter.reach + 2) {
+        const t = 1 - Math.max(0, e.taskTime) / CONFIG.lamplighter.relightTime;
+        eg.circle(x, top - 26, 13).stroke({ width: 4, color: PAL.ink, alpha: 0.8 });
+        eg.moveTo(x, top - 39).arc(x, top - 26, 13, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t).stroke({ width: 4, color: PAL.ember });
+      }
+    }
     if (e.kind === "halberdier") {
       g.poly([x - 18, top + 6, x - 8, top - 6, x + 10, top - 8, x + 20, top + 4, x + 2, top + 2]).fill(PAL.steel).stroke({ width: 4, color: PAL.ink });
       if (e.elite) {
@@ -735,12 +967,15 @@ export class GameRenderer {
       q.life -= dt;
       q.x += q.vx * dt;
       q.y += q.vy * dt;
-      const drag = q.kind === "smoke" || q.kind === "mist" ? 2.5 : 5;
+      const drag = q.kind === "smoke" || q.kind === "mist" ? 2.5 : q.kind === "glass" ? 1.5 : 5;
       q.vx *= Math.max(0, 1 - dt * drag);
       q.vy *= Math.max(0, 1 - dt * drag);
       if (q.kind === "smoke") q.size += dt * 22;
       if (q.life > 0) {
         alive.push(q);
+      } else if (q.kind === "glass") {
+        this.stamp.rect(q.x - q.size / 2, q.y - q.size / 3, q.size, q.size * 0.66).fill({ color: q.color, alpha: 0.8 });
+        this.markStamp();
       } else if (q.kind === "blood" || q.kind === "chunk") {
         // blood and gore land on the floor for good: the arena gets painted
         this.splat(q.x, q.y, q.kind === "chunk" ? q.size * 1.4 : q.size * 1.2, q.color);
@@ -807,10 +1042,10 @@ export class GameRenderer {
     const minions = world.minions.length;
     let stealth = "";
     if (world.dark && p.alive) {
-      const lit = world.isLit(p.pos, false);
+      const where = world.isHoly(p.pos) ? "W ŚWIĘTYM ŚWIETLE" : world.isLit(p.pos, false) ? "W ŚWIETLE" : "w mroku";
       const seen = world.alarm ? "wykryty" : "ukryty";
       const burning = world.exposure > CONFIG.darkness.burnDelay * 0.5 ? "  ·  światło parzy!" : "";
-      stealth = `\n${lit ? "W ŚWIETLE" : "w mroku"}  ·  ${seen}${burning}`;
+      stealth = `\n${where}  ·  ${seen}${burning}`;
     }
     this.hudText.text =
       `${w.name}  ·  ${status}\n` +
@@ -865,6 +1100,21 @@ export class GameRenderer {
 }
 
 // ------------------------------------------------------------------ helpers
+/** Candelabra arms: x offset and the order they go dark in (0 and 1 survive the first shot). */
+const CANDELABRA_ARMS: [number, number][] = [[-22, 2], [-11, 0], [0, 3], [11, 1], [22, 4]];
+const CHANDELIER_CANDLES = 8;
+
+/** Where a wall-mounted torch's bracket meets the wall face. */
+function wallFace(l: Light, head: Vec): Vec {
+  const { width: W, height: H, wall } = CONFIG.room;
+  switch (l.wall ?? "N") {
+    case "N": return { x: head.x, y: wall - 6 };
+    case "S": return { x: head.x, y: H - wall + 6 };
+    case "W": return { x: wall - 6, y: head.y - 8 };
+    default: return { x: W - wall + 6, y: head.y - 8 };
+  }
+}
+
 function rnd(a: number, b: number): number {
   return a + Math.random() * (b - a);
 }

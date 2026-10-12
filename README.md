@@ -65,8 +65,8 @@ Inne skrypty:
 - Widzą cię, gdy wejdziesz w światło, podejdziesz bardzo blisko albo błyśniesz wystrzałem w ich pobliżu.
   Przewrócenie ławki koło nich też ich budzi. Wtedy pada ALARM i rusza cała sala.
 - Pierwszy strzał z mroku to zasadzka: podwójne obrażenia (zabija halabardnika jednym strzałem).
-- Świece gasisz strzałem, żeby powiększyć mrok przed walką.
-- W świetle zadajesz mniej obrażeń, a po kilku sekundach światło zaczyna parzyć (pół serca co 3 s).
+- Światła gasisz strzałem, żeby powiększyć mrok (szczegóły w sekcji „Światło”).
+- W świetle zadajesz mniej obrażeń. Święte światło witraży po kilku sekundach zaczyna parzyć (pół serca co 3 s).
 - W mroku sługi biją mocniej i wolniej się rozpadają, w świetle rozpadają się szybciej i dostają mocniej.
 - Strażnik z latarnią po śmierci upuszcza ją, a latarnia dalej świeci na posadzce.
 - W mroku widać tylko żarzące się oczy, dusze, płomienie i kule. HUD pokazuje, czy stoisz w świetle i czy cię wykryto.
@@ -83,6 +83,24 @@ Inne skrypty:
   Jego pokonanie kończy piętro.
 - Minimapa w prawym górnym rogu: odwiedzone pokoje, ich sąsiedzi, ossuarium i komnata kapitana.
 
+## Światło: jasne sale, mrok trzeba wywalczyć
+
+- Sale są jasno oświetlone (ok. 35–65% posadzki), mrok leży na krańcach i w rogach.
+  Każde drzwi prowadzą w kieszeń cienia: stamtąd wybierasz cel i otwierasz walkę zasadzką.
+- Źródła światła:
+  - **świeca**: jeden strzał;
+  - **kandelabr**: dwa strzały, pierwszy zbija część świec i zmniejsza krąg światła;
+  - **pochodnia** na ścianie: jeden strzał;
+  - **żyrandol** nad środkiem sali: dwa strzały w ramę. Łańcuch pęka, żyrandol spada po chwili,
+    miażdży wszystkich pod sobą (strażników i sługi, ciebie też trafi) i gasi środek sali;
+  - **witraż**: święte światło, którego nie da się zgasić. Strzał w szybę sypie szkłem na strażników
+    w jego świetle, a światło przestaje być święte.
+- Parzy tylko święte światło (witraże). Zwykłe światło tylko cię odkrywa i osłabia.
+- **Latarnik**: wybrany strażnik z kagankiem na tyczce. Idzie do zgaszonego światła i po chwili je zapala,
+  przed alarmem i w trakcie walki. Nie zapali spadłego żyrandola ani witraża.
+  Pierwszy do odstrzału, jeśli chcesz utrzymać mrok.
+- Spadający żyrandol i pękający witraż robią hałas: budzą strażników w pobliżu.
+
 Cała grafika to na razie stylizowane placeholdery w palecie gry. Sprite'y według przewodnika stylu dojdą później.
 
 ## Struktura
@@ -92,7 +110,7 @@ src/
   game/        czysta logika (bez PixiJS) - testowana w Node
     config.ts  wszystkie liczby do balansu w jednym miejscu
     math.ts    wektory, kolizje, deterministyczny RNG
-    world.ts   symulacja pokoju: gracz, broń, wrogowie, sługi, mrok, drzwi, zdarzenia
+    world.ts   symulacja pokoju: gracz, broń, wrogowie, sługi, światło i mrok, drzwi, zdarzenia
     rooms.ts   szablony pokoi (Nawa, Krypta, Kaplica, Zbrojownia, start, ossuarium, boss)
     floor.ts   generator piętra, przejścia między pokojami
   render/
