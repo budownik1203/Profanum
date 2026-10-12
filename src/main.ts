@@ -27,6 +27,9 @@ async function boot(): Promise<void> {
   let world = World.firstRoom();
   let acc = 0;
   let hitstop = 0;
+  // the room waits for the first click: gives the page keyboard focus and a moment to look around
+  let started = false;
+  app.canvas.addEventListener("pointerdown", () => (started = true), { once: true });
 
   app.ticker.add((ticker) => {
     const dt = Math.min(0.1, ticker.deltaMS / 1000);
@@ -39,7 +42,9 @@ async function boot(): Promise<void> {
     }
 
     // hit-stop: freeze the simulation for a few frames on heavy hits
-    if (hitstop > 0) {
+    if (!started) {
+      input.endFrame();
+    } else if (hitstop > 0) {
       hitstop -= dt;
     } else {
       acc += dt;
@@ -67,7 +72,7 @@ async function boot(): Promise<void> {
 
     // edge presses are cleared only after a simulation step consumed them (see the loop above),
     // so a click is never lost on frames where no step runs (high refresh rates, hit-stop)
-    view.draw(world, dt, aim);
+    view.draw(world, dt, aim, started);
   });
 }
 

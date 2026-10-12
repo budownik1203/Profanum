@@ -149,7 +149,7 @@ export class GameRenderer {
   }
 
   // ---------------------------------------------------------------- per frame
-  draw(world: World, dt: number, aim: Vec): void {
+  draw(world: World, dt: number, aim: Vec, started = true): void {
     this.updateParticles(dt);
     for (const [id, t] of this.telegraphs) {
       if (t - dt <= 0) this.telegraphs.delete(id);
@@ -174,7 +174,7 @@ export class GameRenderer {
     this.drawActors(world);
     this.drawBullets(world);
     this.drawParticles();
-    this.drawHud(world);
+    this.drawHud(world, started);
   }
 
   // ---------------------------------------------------------------- floor and decals
@@ -466,7 +466,7 @@ export class GameRenderer {
   }
 
   // ---------------------------------------------------------------- HUD
-  private drawHud(world: World): void {
+  private drawHud(world: World, started: boolean): void {
     const g = this.hudG;
     g.clear();
     const p = world.player;
@@ -485,7 +485,8 @@ export class GameRenderer {
     const status = w.reloadLeft > 0 ? "ładuje…" : `${w.loaded}/${w.capacity}`;
     this.hudText.text = `${w.name}  ·  ${status}\nStrażników: ${world.enemies.length}`;
 
-    if (!p.alive) this.bannerText.text = "NIE ŻYJESZ\n[Enter] od nowa";
+    if (!started) this.bannerText.text = "PROFANUM\nKliknij, aby zacząć";
+    else if (!p.alive) this.bannerText.text = "NIE ŻYJESZ\n[Enter] od nowa";
     else if (world.cleared) this.bannerText.text = "POKÓJ OCZYSZCZONY\n[Enter] od nowa";
     else this.bannerText.text = "";
   }
