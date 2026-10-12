@@ -5,7 +5,8 @@
  */
 import { Container, Graphics, RenderTexture, Sprite, Text, Texture, type Renderer } from "pixi.js";
 import { CONFIG } from "../game/config.js";
-import type { Corpse, Cover, GameEvent, Soul, Unit, World } from "../game/world.js";
+import type { Corpse, Cover, Door, GameEvent, Soul, Unit, World } from "../game/world.js";
+import type { Floor } from "../game/floor.js";
 import type { Vec } from "../game/math.js";
 import { PAL } from "../palette.js";
 
@@ -46,12 +47,15 @@ export class GameRenderer {
   private glowLayer = new Container();
   private glowG = new Graphics();
   private floaters: { text: Text; life: number; vy: number }[] = [];
+  /** Every room keeps its own blood-soaked floor. */
+  private decalTextures = new Map<number, RenderTexture>();
   private actorsG = new Graphics();
   private bulletsG = new Graphics();
   private fxG = new Graphics();
   private hudG = new Graphics();
   private hudText: Text;
   private bannerText: Text;
+  private bossText: Text;
   private vignette: Sprite;
 
   private particles: Particle[] = [];
@@ -66,8 +70,9 @@ export class GameRenderer {
   constructor(private renderer: Renderer) {
     const { width, height } = CONFIG.room;
     this.decals = RenderTexture.create({ width, height });
+    this.decalTextures.set(-1, this.decals);
     this.decalSprite = new Sprite(this.decals);
-    this.drawFloor();
+    this.drawFloor([]);
     this.camLayer.addChild(this.floor, this.decalSprite, this.corpsesG, this.coversG, this.actorsG);
     this.glowLayer.addChild(this.glowG, this.soulsG, this.bulletsG, this.fxG);
 
@@ -93,10 +98,12 @@ export class GameRenderer {
     this.bannerText.anchor.set(0.5);
     this.bannerText.position.set(VIEW_W / 2, VIEW_H * 0.42);
 
-    this.root.addChild(this.camLayer, this.darkSprite, this.glowLayer, this.vignette, this.hudG, this.hudText, this.bannerText);
+    this.bossText = new Text({ text: "", style: { ...style, fontSize: 26 } });
+    this.bossText.anchor.set(0.5);
+    this.root.addChild(this.camLayer, this.darkSprite, this.glowLayer, this.vignette, this.hudG, this.hudText, this.bannerText, this.bossText);
   }
 
-  /** Reset per-room state (decals, particles) for a fresh world. */
+  /** Forget every room (a new floor / a new run). */
   reset(): void {
     this.particles = [];
     for (const f of this.floaters) f.text.destroy();
@@ -104,8 +111,28 @@ export class GameRenderer {
     this.telegraphs.clear();
     this.shake = 0;
     const clear = new Graphics().rect(0, 0, 1, 1).fill({ color: 0, alpha: 0 });
-    this.renderer.render({ container: clear, target: this.decals, clear: true });
+    for (const rt of this.decalTextures.values()) this.renderer.render({ container: clear, target: rt, clear: true });
     clear.destroy();
+  }
+
+  /** Switch to another room: its own blood texture, its doorways, the camera snaps to the player. */
+  setRoom(id: number, world: World): void {
+    let rt = this.decalTextures.get(id);
+    if (!rt) {
+      rt = RenderTexture.create({ width: CONFIG.room.width, height: CONFIG.room.height });
+      this.decalTextures.set(id, rt);
+    }
+    this.flushStamps(); // finish the old room's blood first
+    this.decals = rt;
+    this.decalSprite.texture = rt;
+    this.drawFloor(world.doors);
+    this.particles = [];
+    this.cam = { ...world.player.pos };
+  }
+
+  /** A line of text over the necromancer (room names, "room cleared"). */
+  announce(world: World, text: string, color: number = PAL.hudText): void {
+    this.floatText({ x: world.player.pos.x, y: world.player.pos.y - 40 }, text, color, 32);
   }
 
   /** Fit the 1920x1080 virtual view into the window (letterboxed). */
@@ -231,6 +258,13 @@ export class GameRenderer {
         case "telegraph":
           this.telegraphs.set(e.enemy, 0.7);
           break;
+        case "doorsShut":
+          this.addShake(8);
+          break;
+        case "shrine":
+          for (let i = 0; i < 26; i++) this.spawn(e.pos, rnd(-200, 200), rnd(-260, 40), rnd(0.4, 1), rnd(1.5, 3.5), PAL.soul, "spark");
+          this.floatText(e.pos, e.halves > 0 ? "+2 dusze, rany zasklepione" : "+2 dusze", PAL.soul, 26);
+          break;
         default:
           break;
       }
@@ -238,7 +272,7 @@ export class GameRenderer {
   }
 
   // ---------------------------------------------------------------- per frame
-  draw(world: World, dt: number, aim: Vec, started = true): void {
+  draw(world: World, dt: number, aim: Vec, started = true, floor?: Floor): void {
     this.updateParticles(dt);
     for (const [id, t] of this.telegraphs) {
       if (t - dt <= 0) this.telegraphs.delete(id);
@@ -261,6 +295,7 @@ export class GameRenderer {
     this.updateFloaters(dt);
 
     this.flushStamps();
+    this.glowG.clear(); // everything that glows is redrawn this frame
     this.drawCovers(world.covers, world);
     this.drawCorpses(world);
     this.drawActors(world);
@@ -270,12 +305,13 @@ export class GameRenderer {
     this.drawParticles();
     this.drawLights(world);
     this.drawDarkness(world);
-    this.drawHud(world, started);
+    this.drawHud(world, started, floor);
   }
 
   // ---------------------------------------------------------------- floor and decals
-  private drawFloor(): void {
+  private drawFloor(doors: Door[]): void {
     const g = this.floor;
+    g.clear();
     const { width: W, height: H, wall } = CONFIG.room;
     g.rect(0, 0, W, H).fill(PAL.floor[0]);
     // flagstones in staggered rows
@@ -296,6 +332,24 @@ export class GameRenderer {
     g.rect(W - wall, 0, wall, H).fill(PAL.wall);
     g.rect(wall, wall - 10, W - wall * 2, 10).fill(PAL.wallTop);
     g.rect(wall - 4, wall - 4, W - wall * 2 + 8, H - wall * 2 + 8).stroke({ width: 8, color: PAL.ink });
+    // doorways: a dark gap in the wall with stone jambs
+    const half = CONFIG.room.door / 2;
+    for (const d of doors) {
+      const r =
+        d.side === "N" ? { x: W / 2 - half, y: 0, w: half * 2, h: wall + 4 }
+        : d.side === "S" ? { x: W / 2 - half, y: H - wall - 4, w: half * 2, h: wall + 4 }
+        : d.side === "W" ? { x: 0, y: H / 2 - half, w: wall + 4, h: half * 2 }
+        : { x: W - wall - 4, y: H / 2 - half, w: wall + 4, h: half * 2 };
+      g.rect(r.x, r.y, r.w, r.h).fill(0x070505);
+      const horizontal = d.side === "N" || d.side === "S";
+      if (horizontal) {
+        g.rect(r.x - 14, r.y, 14, r.h).fill(PAL.wallTop).stroke({ width: 4, color: PAL.ink });
+        g.rect(r.x + r.w, r.y, 14, r.h).fill(PAL.wallTop).stroke({ width: 4, color: PAL.ink });
+      } else {
+        g.rect(r.x, r.y - 14, r.w, 14).fill(PAL.wallTop).stroke({ width: 4, color: PAL.ink });
+        g.rect(r.x, r.y + r.h, r.w, 14).fill(PAL.wallTop).stroke({ width: 4, color: PAL.ink });
+      }
+    }
   }
 
   /** Bake this frame's blood and corpses into the floor texture. */
@@ -378,6 +432,33 @@ export class GameRenderer {
   private drawCovers(covers: Cover[], world?: World): void {
     const g = this.coversG;
     g.clear();
+    if (world) {
+      // shut doors: an iron portcullis drops across the doorway
+      if (!world.doorsOpen) {
+        const { width: W, height: H, wall } = CONFIG.room;
+        const half = CONFIG.room.door / 2;
+        for (const d of world.doors) {
+          const horizontal = d.side === "N" || d.side === "S";
+          const base = d.side === "N" ? wall / 2 : d.side === "S" ? H - wall / 2 : d.side === "W" ? wall / 2 : W - wall / 2;
+          for (let i = -half + 12; i <= half - 12; i += 22) {
+            if (horizontal) g.rect(W / 2 + i - 4, base - wall / 2, 8, wall).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
+            else g.rect(base - wall / 2, H / 2 + i - 4, wall, 8).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
+          }
+        }
+      }
+      // the bone altar
+      const sh = world.shrine;
+      if (sh) {
+        g.ellipse(sh.pos.x, sh.pos.y + 30, 70, 18).fill({ color: PAL.ink, alpha: 0.6 });
+        g.rect(sh.pos.x - 60, sh.pos.y - 10, 120, 40).fill(0x4a4038).stroke({ width: 5, color: PAL.ink });
+        for (let i = -2; i <= 2; i++) {
+          g.circle(sh.pos.x + i * 22, sh.pos.y - 18, 10).fill(sh.used ? 0x6e665a : 0xcfc4a8).stroke({ width: 3, color: PAL.ink });
+        }
+        if (!sh.used) {
+          this.glowG.circle(sh.pos.x, sh.pos.y - 20, 50).fill({ color: PAL.soul, alpha: 0.12 + 0.06 * Math.sin(world.time * 3) });
+        }
+      }
+    }
     for (const l of world?.lights ?? []) {
       if (l.kind !== "candle") continue;
       g.ellipse(l.pos.x, l.pos.y + 22, 18, 6).fill({ color: PAL.ink, alpha: 0.6 });
@@ -474,7 +555,6 @@ export class GameRenderer {
   private drawActors(world: World): void {
     const g = this.actorsG;
     g.clear();
-    this.glowG.clear();
     // draw back to front by y so overlaps read correctly in 3/4 view
     const actors: { y: number; draw: () => void }[] = world.units.map((u) => ({ y: u.pos.y, draw: () => this.drawUnit(u, world) }));
     if (world.player.alive) actors.push({ y: world.player.pos.y, draw: () => this.drawPlayer(world) });
@@ -578,6 +658,11 @@ export class GameRenderer {
     }
     if (e.kind === "halberdier") {
       g.poly([x - 18, top + 6, x - 8, top - 6, x + 10, top - 8, x + 20, top + 4, x + 2, top + 2]).fill(PAL.steel).stroke({ width: 4, color: PAL.ink });
+      if (e.elite) {
+        // the Captain of the Guard: a crimson crest and a gilded gorget
+        g.poly([x - 2, top - 6, x + 6, top - 34, x + 14, top - 30, x + 8, top - 6]).fill(PAL.heart).stroke({ width: 3, color: PAL.ink });
+        g.rect(x - 16, top + 22, 32, 8).fill(0xa8823e).stroke({ width: 3, color: PAL.ink });
+      }
       // halberd: pole and blade along e.dir (raised during the wind-up)
       const raise = e.state === "windup" ? -40 : 0;
       const hx = x + e.dir.x * 18;
@@ -687,9 +772,23 @@ export class GameRenderer {
   }
 
   // ---------------------------------------------------------------- HUD
-  private drawHud(world: World, started: boolean): void {
+  private drawHud(world: World, started: boolean, floor?: Floor): void {
     const g = this.hudG;
     g.clear();
+    if (floor) this.drawMinimap(g, floor);
+    // boss health bar
+    const elite = world.units.find((u) => u.elite && u.team === "enemy");
+    if (elite) {
+      const bw = 720;
+      const bx = (VIEW_W - bw) / 2;
+      const by = VIEW_H - 70;
+      g.rect(bx - 4, by - 4, bw + 8, 22).fill(PAL.ink);
+      g.rect(bx, by, bw * Math.max(0, elite.hp / elite.maxHp), 14).fill(PAL.heart);
+      this.bossText.text = "Kapitan Straży Miejskiej";
+      this.bossText.position.set(VIEW_W / 2, by - 24);
+    } else {
+      this.bossText.text = "";
+    }
     this.failTime = Math.max(0, this.failTime - 1 / 60);
     const p = world.player;
     // hearts, two halves each
@@ -721,8 +820,43 @@ export class GameRenderer {
 
     if (!started) this.bannerText.text = "PROFANUM\nKliknij, aby zacząć";
     else if (!p.alive) this.bannerText.text = "NIE ŻYJESZ\n[Enter] od nowa";
-    else if (world.cleared) this.bannerText.text = "POKÓJ OCZYSZCZONY\n[Enter] od nowa";
+    else if (floor ? floor.cleared : world.cleared) this.bannerText.text = "PIĘTRO OCZYSZCZONE\n[Enter] nowe piętro";
     else this.bannerText.text = "";
+  }
+
+  /** Rooms seen so far: visited ones filled, their neighbours as outlines. */
+  private drawMinimap(g: Graphics, floor: Floor): void {
+    const known = floor.known();
+    const cell = 34;
+    const gap = 8;
+    const xs = floor.rooms.map((r) => r.gx);
+    const ys = floor.rooms.map((r) => r.gy);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const ox = VIEW_W - 48 - (maxX - minX + 1) * (cell + gap);
+    const oy = 40;
+    const at = (gx: number, gy: number) => ({ x: ox + (gx - minX) * (cell + gap), y: oy + (gy - minY) * (cell + gap) });
+    for (const r of known) {
+      const p = at(r.gx, r.gy);
+      // corridors to neighbours
+      for (const [side, to] of Object.entries(r.doors)) {
+        if (to === undefined || !r.visited) continue;
+        const cx = p.x + cell / 2;
+        const cy = p.y + cell / 2;
+        const dx = side === "E" ? 1 : side === "W" ? -1 : 0;
+        const dy = side === "S" ? 1 : side === "N" ? -1 : 0;
+        g.moveTo(cx + (dx * cell) / 2, cy + (dy * cell) / 2).lineTo(cx + dx * (cell / 2 + gap), cy + dy * (cell / 2 + gap)).stroke({ width: 4, color: PAL.hudDim });
+      }
+    }
+    for (const r of known) {
+      const p = at(r.gx, r.gy);
+      const cleared = r.world?.cleared && r.world.hadEnemies;
+      const fill = r.id === floor.current ? PAL.ember : r.visited ? (cleared ? 0x3a322a : 0x6a5c4c) : PAL.ink;
+      g.rect(p.x, p.y, cell, cell).fill({ color: fill, alpha: r.visited ? 0.95 : 0.5 }).stroke({ width: 3, color: r.visited ? PAL.hudText : PAL.hudDim });
+      if (r.type === "boss") g.circle(p.x + cell / 2, p.y + cell / 2, 7).fill(PAL.heart).stroke({ width: 2, color: PAL.ink });
+      if (r.type === "treasure") g.circle(p.x + cell / 2, p.y + cell / 2, 6).fill(PAL.soul).stroke({ width: 2, color: PAL.ink });
+    }
   }
 
   private addShake(v: number): void {

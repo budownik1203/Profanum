@@ -36,7 +36,8 @@ Inne skrypty:
 | Przewróć ławkę jako osłonę | Spacja (stojąc przy ławce) |
 | Wskrześ świeżego trupa (za duszę) | E (stojąc przy trupie) |
 | Wyślij sługi na wskazany punkt | Q |
-| Od nowa po śmierci albo wyczyszczeniu pokoju | Enter |
+| Przejście do sąsiedniego pokoju | wyjdź przez otwarte drzwi w ścianie |
+| Nowe piętro po śmierci albo wygranej | Enter |
 
 ## Kamień milowy 1: walka w jednym pokoju
 
@@ -70,6 +71,18 @@ Inne skrypty:
 - Strażnik z latarnią po śmierci upuszcza ją, a latarnia dalej świeci na posadzce.
 - W mroku widać tylko żarzące się oczy, dusze, płomienie i kule. HUD pokazuje, czy stoisz w świetle i czy cię wykryto.
 
+## Kamień milowy 4: piętro
+
+- Piętro to 8 pokoi na siatce, połączonych drzwiami: grób zbiorowy (start), pokoje walki, ossuarium i komnata kapitana.
+- Pokoje walki mają cztery układy: Nawa, Krypta, Zbrojownia i Kaplica (pokój światła, w którym walka zaczyna się od razu).
+  Im dalej od startu, tym więcej strażników.
+- Drzwi zatrzaskują się przy alarmie i otwierają po wyczyszczeniu pokoju. Przed alarmem można się wycofać.
+- Sługi przechodzą z tobą przez drzwi. Krew i trupy zostają w pokojach, które opuściłeś.
+- Ossuarium ma ołtarz kości: raz leczy (do jednego serca) i daje 2 dusze.
+- Komnata kapitana jest najdalej od startu. Kapitan Straży (na razie silniejszy halabardnik z pasem zdrowia) z oddziałem.
+  Jego pokonanie kończy piętro.
+- Minimapa w prawym górnym rogu: odwiedzone pokoje, ich sąsiedzi, ossuarium i komnata kapitana.
+
 Cała grafika to na razie stylizowane placeholdery w palecie gry. Sprite'y według przewodnika stylu dojdą później.
 
 ## Struktura
@@ -79,7 +92,9 @@ src/
   game/        czysta logika (bez PixiJS) - testowana w Node
     config.ts  wszystkie liczby do balansu w jednym miejscu
     math.ts    wektory, kolizje, deterministyczny RNG
-    world.ts   symulacja pokoju: gracz, broń, wrogowie, kule, osłony, zdarzenia
+    world.ts   symulacja pokoju: gracz, broń, wrogowie, sługi, mrok, drzwi, zdarzenia
+    rooms.ts   szablony pokoi (Nawa, Krypta, Kaplica, Zbrojownia, start, ossuarium, boss)
+    floor.ts   generator piętra, przejścia między pokojami
   render/
     renderer.ts  widok w PixiJS v8: placeholdery, krew, cząsteczki, HUD
   input.ts     klawiatura i mysz

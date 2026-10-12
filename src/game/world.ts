@@ -111,6 +111,8 @@ export interface Unit {
   routeIdx: number;
   /** Carries a lantern (a moving light source). */
   lantern: boolean;
+  /** A tougher named guard (the floor's boss for now). */
+  elite: boolean;
   alive: boolean;
 }
 /** Kept for readability: an enemy is a Unit on the "enemy" team. */
@@ -138,6 +140,21 @@ export interface Soul {
 export type Faction = "player" | "enemy" | "minion";
 
 export type LightKind = "candle" | "lantern" | "flash";
+
+export type Side = "N" | "E" | "S" | "W";
+
+/** A doorway in one of the four walls, leading to another room of the floor. */
+export interface Door {
+  side: Side;
+  /** Id of the room on the other side. */
+  to: number;
+}
+
+/** Bone altar in a treasure room: heals and gives souls, once. */
+export interface Shrine {
+  pos: Vec;
+  used: boolean;
+}
 
 export interface Light {
   id: number;
@@ -192,7 +209,16 @@ export type GameEvent =
   | { type: "alarm"; pos: Vec; by: number }
   | { type: "candleOut"; pos: Vec; light: number }
   | { type: "burn"; pos: Vec }
+  | { type: "exit"; door: Door }
+  | { type: "shrine"; pos: Vec; halves: number; souls: number }
+  | { type: "doorsShut" }
+  | { type: "enterRoom"; room: number; side: Side }
+  | { type: "floorCleared" }
   | { type: "roomCleared" };
+
+/** Ids are unique across all rooms of a run (minions walk from room to room). */
+let NEXT_ID = 1;
+export const nextId = (): number => NEXT_ID++;
 
 const statsOf = (kind: UnitKind) => (kind === "halberdier" ? CONFIG.halberdier : CONFIG.arquebusier);
 
@@ -219,7 +245,12 @@ export class World {
   private burnTick = 0;
   time = 0;
   cleared = false;
-  private nextId = 1;
+  doors: Door[] = [];
+  shrine: Shrine | null = null;
+  /** True once any guard was placed in the room (an empty room is not "cleared" in combat). */
+  hadEnemies = false;
+  private exited = false;
+  private wasOpen = true;
   private rng: () => number;
 
   constructor(rng: () => number = Math.random) {
@@ -287,7 +318,7 @@ export class World {
   }
 
   addCover(x: number, y: number, w: number, h: number): Cover {
-    const c: Cover = { id: this.nextId++, x, y, w, h, flipped: false, hp: CONFIG.cover.hp, broken: false };
+    const c: Cover = { id: nextId(), x, y, w, h, flipped: false, hp: CONFIG.cover.hp, broken: false };
     this.covers.push(c);
     return c;
   }
@@ -295,7 +326,7 @@ export class World {
   addLight(kind: LightKind, pos: Vec, owner?: number): Light {
     const d = CONFIG.darkness;
     const radius = kind === "candle" ? d.candleRadius : kind === "lantern" ? d.lanternRadius : d.flashRadius;
-    const l: Light = { id: this.nextId++, kind, pos: { ...pos }, radius, on: true, owner, life: kind === "flash" ? d.flashTime : undefined };
+    const l: Light = { id: nextId(), kind, pos: { ...pos }, radius, on: true, owner, life: kind === "flash" ? d.flashTime : undefined };
     this.lights.push(l);
     return l;
   }
@@ -333,7 +364,7 @@ export class World {
   ): Unit {
     const cfg = statsOf(kind);
     const u: Unit = {
-      id: this.nextId++,
+      id: nextId(),
       kind,
       team,
       pos: { ...pos },
@@ -351,9 +382,11 @@ export class World {
       route: opts.route ?? [],
       routeIdx: 0,
       lantern: opts.lantern ?? false,
+      elite: false,
       alive: true,
     };
     if (opts.state && team === "enemy") u.state = opts.state;
+    if (team === "enemy") this.hadEnemies = true;
     this.units.push(u);
     if (u.lantern) this.addLight("lantern", u.pos, u.id);
     return u;
@@ -400,7 +433,77 @@ export class World {
     this.units = this.units.filter((u) => u.alive);
     if (!this.cleared && this.enemies.length === 0) {
       this.cleared = true;
-      this.events.push({ type: "roomCleared" });
+      if (this.hadEnemies) this.events.push({ type: "roomCleared" });
+    }
+    const open = this.doorsOpen;
+    if (this.wasOpen && !open && this.doors.length > 0) this.events.push({ type: "doorsShut" });
+    this.wasOpen = open;
+  }
+
+  // ---------------------------------------------------------------- doors
+  /** Doors slam shut when the alarm sounds and open again once the room is cleared. */
+  get doorsOpen(): boolean {
+    return !(this.alarm && this.enemies.length > 0);
+  }
+
+  addDoor(side: Side, to: number): Door {
+    const d: Door = { side, to };
+    this.doors.push(d);
+    return d;
+  }
+
+  /** Centre of a doorway on the wall line. */
+  doorCenter(side: Side): Vec {
+    const { w, h } = this.room;
+    return side === "N" ? vec(w / 2, 0) : side === "S" ? vec(w / 2, h) : side === "W" ? vec(0, h / 2) : vec(w, h / 2);
+  }
+
+  /** Put the player just inside the given doorway (arriving from the neighbouring room). */
+  placeAtDoor(side: Side): Vec {
+    const c = this.doorCenter(side);
+    const inset = CONFIG.room.wall + CONFIG.player.radius + 46;
+    const pos =
+      side === "N" ? vec(c.x, inset) : side === "S" ? vec(c.x, this.room.h - inset) : side === "W" ? vec(inset, c.y) : vec(this.room.w - inset, c.y);
+    this.player.pos = pos;
+    this.player.push = vec();
+    this.exited = false;
+    return pos;
+  }
+
+  /** The player's collision also lets him walk out through an open doorway. */
+  private collidePlayer(pos: Vec, r: number): Vec {
+    const wall = CONFIG.room.wall;
+    const { w, h } = this.room;
+    const half = CONFIG.room.door / 2;
+    let minX = wall + r, maxX = w - wall - r, minY = wall + r, maxY = h - wall - r;
+    if (this.doorsOpen) {
+      for (const d of this.doors) {
+        const along = d.side === "N" || d.side === "S" ? Math.abs(pos.x - w / 2) : Math.abs(pos.y - h / 2);
+        if (along > half - r) continue;
+        if (d.side === "N") minY = -r * 2;
+        if (d.side === "S") maxY = h + r * 2;
+        if (d.side === "W") minX = -r * 2;
+        if (d.side === "E") maxX = w + r * 2;
+      }
+    }
+    let p = { x: clamp(pos.x, minX, maxX), y: clamp(pos.y, minY, maxY) };
+    // inside a doorway: stay between its jambs
+    if (p.y < wall + r || p.y > h - wall - r) p.x = clamp(p.x, w / 2 - half + r, w / 2 + half - r);
+    if (p.x < wall + r || p.x > w - wall - r) p.y = clamp(p.y, h / 2 - half + r, h / 2 + half - r);
+    for (const c of this.solidCovers) if (circleHitsRect(p, r, c)) p = pushOutOfRect(p, r, c);
+    return p;
+  }
+
+  private checkExit(): void {
+    if (this.exited || !this.doorsOpen) return;
+    const p = this.player.pos;
+    const t = CONFIG.room.wall * 0.3;
+    const { w, h } = this.room;
+    const side: Side | null = p.y < t ? "N" : p.y > h - t ? "S" : p.x < t ? "W" : p.x > w - t ? "E" : null;
+    const door = side ? this.doors.find((d) => d.side === side) : undefined;
+    if (door) {
+      this.exited = true;
+      this.events.push({ type: "exit", door });
     }
   }
 
@@ -429,7 +532,17 @@ export class World {
 
     p.push = scale(p.push, Math.max(0, 1 - dt * 10));
     p.pos = add(p.pos, scale(add(p.vel, p.push), dt));
-    p.pos = this.collideWorld(p.pos, cfg.radius);
+    p.pos = this.collidePlayer(p.pos, cfg.radius);
+    this.checkExit();
+
+    // the bone altar of a treasure room
+    if (this.shrine && !this.shrine.used && dist(this.shrine.pos, p.pos) < 70) {
+      this.shrine.used = true;
+      const halves = Math.min(2, CONFIG.player.maxHalves - p.halves);
+      p.halves += halves;
+      p.souls += 2;
+      this.events.push({ type: "shrine", pos: { ...this.shrine.pos }, halves, souls: 2 });
+    }
 
     // weapon
     const w = p.weapon;
@@ -738,12 +851,12 @@ export class World {
     for (const l of this.lights) if (l.owner === u.id) l.owner = undefined;
     if (u.team === "enemy") {
       this.events.push({ type: "enemyDeath", pos: { ...u.pos }, dir, kind: u.kind, ambush });
-      this.corpses.push({ id: this.nextId++, kind: u.kind, pos: { ...u.pos }, dir, echo: n.echo, raises: 0, fromMinion: false });
-      this.souls.push({ id: this.nextId++, pos: { x: u.pos.x, y: u.pos.y - 30 }, life: n.soulLife });
+      this.corpses.push({ id: nextId(), kind: u.kind, pos: { ...u.pos }, dir, echo: n.echo, raises: 0, fromMinion: false });
+      this.souls.push({ id: nextId(), pos: { x: u.pos.x, y: u.pos.y - 30 }, life: n.soulLife });
     } else {
       this.events.push({ type: "minionDeath", pos: { ...u.pos }, dir, kind: u.kind, crumbled });
       // a fallen minion leaves a body that can be raised once more (no new soul)
-      this.corpses.push({ id: this.nextId++, kind: u.kind, pos: { ...u.pos }, dir, echo: u.raises < n.maxRaises ? n.echo : 0, raises: u.raises, fromMinion: true });
+      this.corpses.push({ id: nextId(), kind: u.kind, pos: { ...u.pos }, dir, echo: u.raises < n.maxRaises ? n.echo : 0, raises: u.raises, fromMinion: true });
     }
   }
 

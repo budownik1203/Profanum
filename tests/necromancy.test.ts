@@ -145,7 +145,11 @@ test("Q sends the minions to the aimed point", () => {
 
 test("the room counts as cleared even with minions still standing", () => {
   const w = new World(makeRng(15));
+  const guard = w.spawn("halberdier", vec(1500, 300));
+  freeze(guard);
   w.spawn("halberdier", vec(300, 300), "minion");
+  step(w, idleInput(), DT);
+  guard.alive = false;
   const ev = step(w, idleInput(), DT);
   assert.ok(ev.some((e) => e.type === "roomCleared"));
 });

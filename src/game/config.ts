@@ -3,7 +3,7 @@
  * The player sprite is ~96 px tall at 1080p (see the design doc), the collision circle is smaller.
  */
 export const CONFIG = {
-  room: { width: 1800, height: 1100, wall: 48 },
+  room: { width: 1800, height: 1100, wall: 48, door: 150 },
 
   player: {
     radius: 20,
