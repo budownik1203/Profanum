@@ -56,4 +56,21 @@ export const CONFIG = {
 
   enemyBulletDamage: 1, // halves
   contactDamage: 1,
+  /** Damage a charging halberdier or an enemy bullet deals to a minion. */
+  hitOnMinion: 3,
+
+  /** Necromancy: souls, raising the dead, minions. */
+  necro: {
+    soulLife: 6, // seconds a soul hovers over the corpse before fading
+    soulPickup: 42, // walk this close to collect it
+    echo: 6, // seconds a fresh corpse can still be raised
+    raiseRange: 100,
+    raiseCost: 1, // souls
+    minionLimit: 3,
+    minionLifetime: 30, // seconds before a minion crumbles
+    maxRaises: 2, // a corpse can be raised, fall, and be raised once more
+    commandTime: 4, // seconds minions obey the Q order
+    commandRadius: 220, // they engage enemies this close to the ordered point
+    followDistance: 110,
+  },
 } as const;

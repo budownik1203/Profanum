@@ -24,6 +24,10 @@ export const PAL = {
   gunnerCoat: 0x3a4048,
   gunnerCoatMid: 0x22262c,
 
+  minion: 0x5c5852, // raised dead: ash-grey flesh
+  minionMid: 0x2e2b28,
+  soul: 0xffe6b8,
+
   blood: 0x5e0d0a,
   bloodDark: 0x350605,
   smoke: 0x8a8278,

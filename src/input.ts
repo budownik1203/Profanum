@@ -1,7 +1,8 @@
 /**
  * Keyboard + mouse → InputState.
  * WSAD move, mouse aims, LMB shoots, RMB dissolves into mist (dodge), R reloads,
- * Space topples cover, Enter restarts after death or a cleared room.
+ * Space topples cover, E raises a corpse, Q sends the minions to the cursor,
+ * Enter restarts after death or a cleared room.
  */
 import type { InputState } from "./game/world.js";
 import type { Vec } from "./game/math.js";
@@ -17,7 +18,7 @@ export class Input {
     window.addEventListener("keydown", (e) => {
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
-      if (["Space", "KeyW", "KeyA", "KeyS", "KeyD"].includes(e.code)) e.preventDefault();
+      if (["Space", "KeyW", "KeyA", "KeyS", "KeyD", "KeyE", "KeyQ"].includes(e.code)) e.preventDefault();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
     window.addEventListener("blur", () => {
@@ -53,6 +54,8 @@ export class Input {
       dodge: this.pressed.has("Mouse2") || this.pressed.has("ShiftLeft"),
       reload: this.pressed.has("KeyR"),
       flip: this.pressed.has("Space"),
+      raise: this.pressed.has("KeyE"),
+      command: this.pressed.has("KeyQ"),
     };
   }
 

@@ -7,7 +7,7 @@ Dokument projektowy żyje osobno (Claude Docs: „Profanum — Dokument Projekto
 
 ## Uruchomienie
 
-Wymagany Node.js 18+.
+Wymagany Node.js 18+. PixiJS jest przypięty do wersji 8.6.6, tej samej co w wersji na stronę.
 
 ```bash
 npm install
@@ -34,6 +34,8 @@ Inne skrypty:
 | Rozpad w mgłę (unik, nietykalność) | PPM albo lewy Shift |
 | Przeładowanie | R |
 | Przewróć ławkę jako osłonę | Spacja (stojąc przy ławce) |
+| Wskrześ świeżego trupa (za duszę) | E (stojąc przy trupie) |
+| Wyślij sługi na wskazany punkt | Q |
 | Od nowa po śmierci albo wyczyszczeniu pokoju | Enter |
 
 ## Kamień milowy 1: walka w jednym pokoju
@@ -45,6 +47,16 @@ Inne skrypty:
 - Arkebuzerzy: trzymają dystans, celują (widać żarzący się lont) i strzelają wolnymi kulami.
 - Ławki: stojące blokują ruch, ale kule nad nimi przelatują. Przewrócone zatrzymują kule i pękają od ostrzału.
 - Krew i trupy zostają na posadzce do końca walki, do tego dym prochowy, wstrząsy ekranu i zamrożenie klatki przy zabójstwie.
+
+## Kamień milowy 2: nekromancja
+
+- Zabity strażnik zostawia trupa i duszę. Dusza unosi się nad ciałem kilka sekund i trzeba po nią podejść.
+- Świeży trup żarzy się, póki można go wskrzesić (6 s). E wskrzesza go za jedną duszę.
+- Sługa zachowuje rolę z życia: halabardnik szarżuje, arkebuzer strzela. Maksymalnie 3 sługi naraz.
+- Sługa rozpada się po 30 s (migocze przed końcem) i zostawia ciało, które można wskrzesić jeszcze raz.
+- Q wysyła sługi na wskazany punkt: idą tam i walczą ze strażnikami w pobliżu.
+- Strażnicy atakują najbliższy cel: ciebie albo sługę. Sługa w linii strzału przyjmuje kulę na siebie.
+- Trupy zostają na posadzce do końca walki.
 
 Cała grafika to na razie stylizowane placeholdery w palecie gry. Sprite'y według przewodnika stylu dojdą później.
 

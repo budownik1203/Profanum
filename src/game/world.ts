@@ -1,6 +1,9 @@
 /**
  * The whole combat simulation for one room. No rendering here: the renderer reads the state
  * and the `events` list each frame, and tests can run the world headless.
+ *
+ * Enemies and raised minions are the same kind of unit (`Unit`) on opposite teams:
+ * a raised halberdier still charges and a raised arquebusier still shoots, just for the necromancer.
  */
 import { CONFIG } from "./config.js";
 import {
@@ -32,6 +35,10 @@ export interface InputState {
   dodge: boolean;
   reload: boolean;
   flip: boolean;
+  /** E: raise the nearest fresh corpse. */
+  raise: boolean;
+  /** Q: send every minion to the aim point. */
+  command: boolean;
 }
 
 export const idleInput = (aim: Vec = vec()): InputState => ({
@@ -41,6 +48,8 @@ export const idleInput = (aim: Vec = vec()): InputState => ({
   dodge: false,
   reload: false,
   flip: false,
+  raise: false,
+  command: false,
 });
 
 export interface Weapon {
@@ -63,36 +72,69 @@ export interface Player {
   dodgeCooldown: number;
   dodgeDir: Vec;
   weapon: Weapon;
+  souls: number;
   alive: boolean;
 }
 
-export type EnemyKind = "halberdier" | "arquebusier";
-export type EnemyState = "approach" | "windup" | "charge" | "recover" | "reposition" | "aim" | "reload";
+export type UnitKind = "halberdier" | "arquebusier";
+/** Kept for readability at call sites that only deal with hostiles. */
+export type EnemyKind = UnitKind;
+export type Team = "enemy" | "minion";
+export type UnitState = "approach" | "windup" | "charge" | "recover" | "reposition" | "aim" | "reload" | "follow";
 
-export interface Enemy {
+export interface Unit {
   id: number;
-  kind: EnemyKind;
+  kind: UnitKind;
+  team: Team;
   pos: Vec;
   push: Vec;
   radius: number;
   hp: number;
-  state: EnemyState;
+  maxHp: number;
+  state: UnitState;
   timer: number;
   /** Locked direction for a charge, or aim direction while aiming. */
   dir: Vec;
   /** Short white flash after being hit (seconds). */
   flash: number;
-  /** Sideways strafing preference for the arquebusier (+1 / -1). */
+  /** Sideways strafing preference for gunners (+1 / -1). */
   strafe: number;
+  /** Minions only: seconds until the body crumbles. */
+  lifetime: number;
+  /** How many times this body has already been raised. */
+  raises: number;
   alive: boolean;
 }
+/** Kept for readability: an enemy is a Unit on the "enemy" team. */
+export type Enemy = Unit;
+
+export interface Corpse {
+  id: number;
+  kind: UnitKind;
+  pos: Vec;
+  /** Which way the body fell (for drawing). */
+  dir: Vec;
+  /** Seconds left while it can still be raised. */
+  echo: number;
+  raises: number;
+  /** Corpses of fallen minions are drawn darker. */
+  fromMinion: boolean;
+}
+
+export interface Soul {
+  id: number;
+  pos: Vec;
+  life: number;
+}
+
+export type Faction = "player" | "enemy" | "minion";
 
 export interface Bullet {
   pos: Vec;
   vel: Vec;
   radius: number;
   damage: number;
-  from: "player" | "enemy";
+  from: Faction;
   life: number;
 }
 
@@ -104,9 +146,11 @@ export interface Cover extends Rect {
 }
 
 export type GameEvent =
-  | { type: "shot"; pos: Vec; dir: Vec; from: "player" | "enemy" }
+  | { type: "shot"; pos: Vec; dir: Vec; from: Faction }
   | { type: "enemyHit"; pos: Vec; dir: Vec; enemy: number }
-  | { type: "enemyDeath"; pos: Vec; dir: Vec; kind: EnemyKind }
+  | { type: "enemyDeath"; pos: Vec; dir: Vec; kind: UnitKind }
+  | { type: "minionHit"; pos: Vec; dir: Vec; unit: number }
+  | { type: "minionDeath"; pos: Vec; dir: Vec; kind: UnitKind; crumbled: boolean }
   | { type: "playerHit"; pos: Vec; dir: Vec }
   | { type: "playerDeath"; pos: Vec }
   | { type: "dodge"; pos: Vec; dir: Vec }
@@ -117,16 +161,27 @@ export type GameEvent =
   | { type: "coverBreak"; cover: number; pos: Vec }
   | { type: "bulletWall"; pos: Vec }
   | { type: "telegraph"; enemy: number }
+  | { type: "soulPickup"; pos: Vec; souls: number }
+  | { type: "raise"; pos: Vec; kind: UnitKind; unit: number }
+  | { type: "raiseFail"; pos: Vec; reason: "noSouls" | "limit" }
+  | { type: "command"; pos: Vec }
   | { type: "roomCleared" };
+
+const statsOf = (kind: UnitKind) => (kind === "halberdier" ? CONFIG.halberdier : CONFIG.arquebusier);
 
 // ------------------------------------------------------------------ world
 export class World {
   readonly room: Rect;
   player: Player;
-  enemies: Enemy[] = [];
+  /** Every unit in the room: hostile guards and the necromancer's minions. */
+  units: Unit[] = [];
+  corpses: Corpse[] = [];
+  souls: Soul[] = [];
   bullets: Bullet[] = [];
   covers: Cover[] = [];
   events: GameEvent[] = [];
+  /** Active Q order: minions go to this point and fight there. */
+  order: { pos: Vec; time: number } | null = null;
   time = 0;
   cleared = false;
   private nextId = 1;
@@ -137,6 +192,15 @@ export class World {
     const { width, height } = CONFIG.room;
     this.room = { x: 0, y: 0, w: width, h: height };
     this.player = this.makePlayer(vec(width / 2, height * 0.75));
+  }
+
+  /** Hostile guards still standing. */
+  get enemies(): Unit[] {
+    return this.units.filter((u) => u.team === "enemy");
+  }
+
+  get minions(): Unit[] {
+    return this.units.filter((u) => u.team === "minion");
   }
 
   private makePlayer(pos: Vec): Player {
@@ -151,6 +215,7 @@ export class World {
       dodgeCooldown: 0,
       dodgeDir: vec(),
       weapon: { name: "Pistolet skałkowy", loaded: CONFIG.flintlock.capacity, capacity: CONFIG.flintlock.capacity, reloadLeft: 0 },
+      souls: 0,
       alive: true,
     };
   }
@@ -182,24 +247,28 @@ export class World {
     return c;
   }
 
-  spawn(kind: EnemyKind, pos: Vec): Enemy {
-    const cfg = kind === "halberdier" ? CONFIG.halberdier : CONFIG.arquebusier;
-    const e: Enemy = {
+  spawn(kind: UnitKind, pos: Vec, team: Team = "enemy"): Unit {
+    const cfg = statsOf(kind);
+    const u: Unit = {
       id: this.nextId++,
       kind,
-      pos,
+      team,
+      pos: { ...pos },
       push: vec(),
       radius: cfg.radius,
       hp: cfg.hp,
+      maxHp: cfg.hp,
       state: kind === "halberdier" ? "approach" : "reposition",
       timer: kind === "halberdier" ? 0 : this.range(CONFIG.arquebusier.reposition),
       dir: vec(0, 1),
       flash: 0,
       strafe: this.rng() < 0.5 ? -1 : 1,
+      lifetime: team === "minion" ? CONFIG.necro.minionLifetime : Infinity,
+      raises: 0,
       alive: true,
     };
-    this.enemies.push(e);
-    return e;
+    this.units.push(u);
+    return u;
   }
 
   private range(r: readonly [number, number]): number {
@@ -210,14 +279,34 @@ export class World {
     return this.covers.filter((c) => !c.broken);
   }
 
+  /** The corpse E would raise right now, if any. */
+  raisableCorpse(): Corpse | undefined {
+    let best: Corpse | undefined;
+    let bestD: number = CONFIG.necro.raiseRange;
+    for (const c of this.corpses) {
+      if (c.echo <= 0 || c.raises >= CONFIG.necro.maxRaises) continue;
+      const d = dist(c.pos, this.player.pos);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
   // ---------------------------------------------------------------- update
   update(dt: number, input: InputState): void {
     this.events = [];
     this.time += dt;
+    if (this.order) {
+      this.order.time -= dt;
+      if (this.order.time <= 0) this.order = null;
+    }
     if (this.player.alive) this.updatePlayer(dt, input);
-    for (const e of this.enemies) if (e.alive) this.updateEnemy(e, dt);
+    for (const u of this.units) if (u.alive) this.updateUnit(u, dt);
     this.updateBullets(dt);
-    this.enemies = this.enemies.filter((e) => e.alive);
+    this.updateDead(dt);
+    this.units = this.units.filter((u) => u.alive);
     if (!this.cleared && this.enemies.length === 0) {
       this.cleared = true;
       this.events.push({ type: "roomCleared" });
@@ -282,7 +371,7 @@ export class World {
       let bestD = CONFIG.cover.flipRange + cfg.radius;
       for (const c of this.solidCovers) {
         if (c.flipped) continue;
-        const d = dist(p.pos, { x: Math.max(c.x, Math.min(p.pos.x, c.x + c.w)), y: Math.max(c.y, Math.min(p.pos.y, c.y + c.h)) });
+        const d = dist(p.pos, { x: clamp(p.pos.x, c.x, c.x + c.w), y: clamp(p.pos.y, c.y, c.y + c.h) });
         if (d < bestD) {
           bestD = d;
           best = c;
@@ -293,6 +382,44 @@ export class World {
         this.events.push({ type: "coverFlip", cover: best.id, pos: { x: best.x + best.w / 2, y: best.y + best.h / 2 } });
       }
     }
+
+    // collect souls by walking through them
+    for (const s of this.souls) {
+      if (s.life > 0 && dist(s.pos, p.pos) < CONFIG.necro.soulPickup) {
+        s.life = 0;
+        p.souls += 1;
+        this.events.push({ type: "soulPickup", pos: { ...s.pos }, souls: p.souls });
+      }
+    }
+
+    // E: raise the nearest fresh corpse
+    if (input.raise) this.tryRaise();
+
+    // Q: send the minions to the aim point
+    if (input.command && this.minions.length > 0) {
+      this.order = { pos: { ...input.aim }, time: CONFIG.necro.commandTime };
+      this.events.push({ type: "command", pos: { ...input.aim } });
+    }
+  }
+
+  private tryRaise(): void {
+    const c = this.raisableCorpse();
+    if (!c) return;
+    const n = CONFIG.necro;
+    if (this.minions.length >= n.minionLimit) {
+      this.events.push({ type: "raiseFail", pos: { ...c.pos }, reason: "limit" });
+      return;
+    }
+    if (this.player.souls < n.raiseCost) {
+      this.events.push({ type: "raiseFail", pos: { ...c.pos }, reason: "noSouls" });
+      return;
+    }
+    this.player.souls -= n.raiseCost;
+    const u = this.spawn(c.kind, c.pos, "minion");
+    u.raises = c.raises + 1;
+    u.state = u.kind === "halberdier" ? "follow" : "reposition";
+    this.corpses = this.corpses.filter((x) => x !== c);
+    this.events.push({ type: "raise", pos: { ...c.pos }, kind: c.kind, unit: u.id });
   }
 
   private startReload(): void {
@@ -302,102 +429,226 @@ export class World {
     this.events.push({ type: "reloadStart", pos: { ...this.player.pos } });
   }
 
-  private updateEnemy(e: Enemy, dt: number): void {
-    const p = this.player;
-    e.flash = Math.max(0, e.flash - dt);
-    e.timer -= dt;
-    const toP = sub(p.pos, e.pos);
-    const d = len(toP);
-    const dirP = norm(toP);
+  // ---------------------------------------------------------------- targeting
+  /** Nearest opponent of a unit: guards pick the player or a minion, minions pick a guard. */
+  private targetFor(u: Unit): { pos: Vec; unit?: Unit; player?: true } | null {
+    let best: { pos: Vec; unit?: Unit; player?: true } | null = null;
+    let bestD = Infinity;
+    if (u.team === "enemy") {
+      if (this.player.alive) {
+        best = { pos: this.player.pos, player: true };
+        bestD = dist(u.pos, this.player.pos);
+      }
+      for (const m of this.units) {
+        if (m.team !== "minion" || !m.alive) continue;
+        const d = dist(u.pos, m.pos);
+        if (d < bestD) {
+          bestD = d;
+          best = { pos: m.pos, unit: m };
+        }
+      }
+      return best;
+    }
+    // minions: obey the order first, otherwise the guard nearest to them
+    const anchor = this.order ? this.order.pos : u.pos;
+    const reach = this.order ? CONFIG.necro.commandRadius : Infinity;
+    for (const e of this.units) {
+      if (e.team !== "enemy" || !e.alive) continue;
+      const d = dist(anchor, e.pos);
+      if (d < reach && d < bestD) {
+        bestD = d;
+        best = { pos: e.pos, unit: e };
+      }
+    }
+    return best;
+  }
+
+  // ---------------------------------------------------------------- units
+  private updateUnit(u: Unit, dt: number): void {
+    u.flash = Math.max(0, u.flash - dt);
+    u.timer -= dt;
+    if (u.team === "minion") {
+      u.lifetime -= dt;
+      if (u.lifetime <= 0) {
+        this.killUnit(u, vec(0, 1), true);
+        return;
+      }
+    }
+    const target = this.targetFor(u);
     let vel = vec();
 
-    if (e.kind === "halberdier") {
+    // minions with nothing to fight walk to the ordered point or stay near the necromancer
+    if (u.team === "minion" && !target) {
+      const goal = this.order ? this.order.pos : this.player.pos;
+      const keep = this.order ? 20 : CONFIG.necro.followDistance;
+      const d = dist(u.pos, goal);
+      if (d > keep) vel = scale(norm(sub(goal, u.pos)), statsOf(u.kind).speed * 1.2);
+      u.state = u.kind === "halberdier" ? "follow" : "reposition";
+      u.timer = Math.max(u.timer, 0.3);
+      this.moveUnit(u, vel, dt);
+      return;
+    }
+    if (!target) {
+      this.moveUnit(u, vel, dt);
+      return;
+    }
+
+    const toT = sub(target.pos, u.pos);
+    const d = len(toT);
+    const dirT = norm(toT);
+
+    if (u.kind === "halberdier") {
       const c = CONFIG.halberdier;
-      switch (e.state) {
+      switch (u.state) {
+        case "follow":
         case "approach":
-          vel = scale(dirP, c.speed);
-          if (d < c.engageRange && p.alive) {
-            e.state = "windup";
-            e.timer = c.windup;
-            e.dir = dirP;
-            this.events.push({ type: "telegraph", enemy: e.id });
+          u.state = "approach";
+          vel = scale(dirT, c.speed);
+          if (d < c.engageRange) {
+            u.state = "windup";
+            u.timer = c.windup;
+            u.dir = dirT;
+            if (u.team === "enemy") this.events.push({ type: "telegraph", enemy: u.id });
           }
           break;
         case "windup":
-          e.dir = dirP; // keeps tracking until the charge locks in
-          if (e.timer <= 0) {
-            e.state = "charge";
-            e.timer = c.chargeTime;
+          u.dir = dirT; // keeps tracking until the charge locks in
+          if (u.timer <= 0) {
+            u.state = "charge";
+            u.timer = c.chargeTime;
           }
           break;
-        case "charge":
-          vel = scale(e.dir, c.chargeSpeed);
-          if (d < e.radius + CONFIG.player.radius + 4) {
-            this.hurtPlayer(CONFIG.contactDamage, e.dir);
-            e.state = "recover";
-            e.timer = c.recover;
-          } else if (e.timer <= 0) {
-            e.state = "recover";
-            e.timer = c.recover;
+        case "charge": {
+          vel = scale(u.dir, c.chargeSpeed);
+          const hit = this.chargeContact(u);
+          if (hit || u.timer <= 0) {
+            u.state = "recover";
+            u.timer = c.recover;
           }
           break;
+        }
         case "recover":
-          if (e.timer <= 0) e.state = "approach";
+          if (u.timer <= 0) u.state = "approach";
           break;
         default:
-          e.state = "approach";
+          u.state = "approach";
       }
     } else {
       const c = CONFIG.arquebusier;
-      switch (e.state) {
+      switch (u.state) {
+        case "follow":
         case "reposition": {
-          // hold the preferred range and strafe around the player
+          u.state = "reposition";
+          // hold the preferred range and strafe around the target
           const radial = d > c.preferredRange + 40 ? 1 : d < c.preferredRange - 40 ? -1 : 0;
-          const side = { x: -dirP.y * e.strafe, y: dirP.x * e.strafe };
-          vel = scale(norm(add(scale(dirP, radial), scale(side, 0.8))), c.speed);
-          if (e.timer <= 0 && p.alive) {
-            e.state = "aim";
-            e.timer = c.aim;
-            this.events.push({ type: "telegraph", enemy: e.id });
+          const side = { x: -dirT.y * u.strafe, y: dirT.x * u.strafe };
+          vel = scale(norm(add(scale(dirT, radial), scale(side, 0.8))), c.speed);
+          if (u.timer <= 0) {
+            u.state = "aim";
+            u.timer = c.aim;
+            if (u.team === "enemy") this.events.push({ type: "telegraph", enemy: u.id });
           }
           break;
         }
         case "aim":
-          e.dir = dirP;
-          if (e.timer <= 0) {
-            const muzzle = add(e.pos, scale(e.dir, e.radius + 16));
-            this.bullets.push({ pos: muzzle, vel: scale(e.dir, c.bulletSpeed), radius: c.bulletRadius, damage: CONFIG.enemyBulletDamage, from: "enemy", life: 4 });
-            this.events.push({ type: "shot", pos: muzzle, dir: e.dir, from: "enemy" });
-            e.state = "reload";
-            e.timer = c.reload;
+          u.dir = dirT;
+          if (u.timer <= 0) {
+            const muzzle = add(u.pos, scale(u.dir, u.radius + 16));
+            this.bullets.push({
+              pos: muzzle,
+              vel: scale(u.dir, c.bulletSpeed),
+              radius: c.bulletRadius,
+              damage: u.team === "enemy" ? CONFIG.enemyBulletDamage : CONFIG.flintlock.damage,
+              from: u.team,
+              life: 4,
+            });
+            this.events.push({ type: "shot", pos: muzzle, dir: u.dir, from: u.team });
+            u.state = "reload";
+            u.timer = c.reload;
           }
           break;
         case "reload":
-          vel = scale({ x: -dirP.y * e.strafe, y: dirP.x * e.strafe }, c.speed * 0.4);
-          if (e.timer <= 0) {
-            e.state = "reposition";
-            e.timer = this.range(c.reposition);
-            if (this.rng() < 0.4) e.strafe *= -1;
+          vel = scale({ x: -dirT.y * u.strafe, y: dirT.x * u.strafe }, c.speed * 0.4);
+          if (u.timer <= 0) {
+            u.state = "reposition";
+            u.timer = this.range(c.reposition);
+            if (this.rng() < 0.4) u.strafe *= -1;
           }
           break;
         default:
-          e.state = "reposition";
+          u.state = "reposition";
       }
     }
-
-    e.push = scale(e.push, Math.max(0, 1 - dt * 8));
-    e.pos = add(e.pos, scale(add(vel, e.push), dt));
-    // keep enemies from stacking on each other
-    for (const o of this.enemies) {
-      if (o === e || !o.alive) continue;
-      const sep = sub(e.pos, o.pos);
-      const sd = len(sep);
-      const min = e.radius + o.radius;
-      if (sd > 0 && sd < min) e.pos = add(e.pos, scale(norm(sep), (min - sd) / 2));
-    }
-    e.pos = this.collideWorld(e.pos, e.radius);
+    this.moveUnit(u, vel, dt);
   }
 
+  private moveUnit(u: Unit, vel: Vec, dt: number): void {
+    u.push = scale(u.push, Math.max(0, 1 - dt * 8));
+    u.pos = add(u.pos, scale(add(vel, u.push), dt));
+    // keep units from stacking on each other
+    for (const o of this.units) {
+      if (o === u || !o.alive) continue;
+      const sep = sub(u.pos, o.pos);
+      const sd = len(sep);
+      const min = u.radius + o.radius;
+      if (sd > 0 && sd < min) u.pos = add(u.pos, scale(norm(sep), (min - sd) / 2));
+    }
+    u.pos = this.collideWorld(u.pos, u.radius);
+  }
+
+  /** A charging halberdier hits the first opponent it touches. */
+  private chargeContact(u: Unit): boolean {
+    if (u.team === "enemy" && this.player.alive && dist(u.pos, this.player.pos) < u.radius + CONFIG.player.radius + 4) {
+      this.hurtPlayer(CONFIG.contactDamage, u.dir);
+      return true;
+    }
+    for (const o of this.units) {
+      if (!o.alive || o.team === u.team) continue;
+      if (dist(u.pos, o.pos) < u.radius + o.radius + 4) {
+        this.hurtUnit(o, u.team === "enemy" ? CONFIG.hitOnMinion : CONFIG.flintlock.damage, u.dir);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private hurtUnit(u: Unit, damage: number, dir: Vec): void {
+    u.hp -= damage;
+    u.flash = 0.08;
+    u.push = add(u.push, scale(dir, CONFIG.flintlock.knockback * 8));
+    if (u.hp <= 0) {
+      this.killUnit(u, dir, false);
+    } else if (u.team === "enemy") {
+      this.events.push({ type: "enemyHit", pos: { ...u.pos }, dir, enemy: u.id });
+    } else {
+      this.events.push({ type: "minionHit", pos: { ...u.pos }, dir, unit: u.id });
+    }
+  }
+
+  private killUnit(u: Unit, dir: Vec, crumbled: boolean): void {
+    u.alive = false;
+    const n = CONFIG.necro;
+    if (u.team === "enemy") {
+      this.events.push({ type: "enemyDeath", pos: { ...u.pos }, dir, kind: u.kind });
+      this.corpses.push({ id: this.nextId++, kind: u.kind, pos: { ...u.pos }, dir, echo: n.echo, raises: 0, fromMinion: false });
+      this.souls.push({ id: this.nextId++, pos: { x: u.pos.x, y: u.pos.y - 30 }, life: n.soulLife });
+    } else {
+      this.events.push({ type: "minionDeath", pos: { ...u.pos }, dir, kind: u.kind, crumbled });
+      // a fallen minion leaves a body that can be raised once more (no new soul)
+      this.corpses.push({ id: this.nextId++, kind: u.kind, pos: { ...u.pos }, dir, echo: u.raises < n.maxRaises ? n.echo : 0, raises: u.raises, fromMinion: true });
+    }
+  }
+
+  private updateDead(dt: number): void {
+    for (const c of this.corpses) c.echo = Math.max(0, c.echo - dt);
+    for (const s of this.souls) {
+      s.life -= dt;
+      s.pos.y -= dt * 6; // drifts slowly upward
+    }
+    this.souls = this.souls.filter((s) => s.life > 0);
+  }
+
+  // ---------------------------------------------------------------- bullets
   private updateBullets(dt: number): void {
     const W = this.room;
     const wall = CONFIG.room.wall;
@@ -429,24 +680,17 @@ export class World {
         b.life = 0;
         continue;
       }
-      if (b.from === "player") {
-        for (const e of this.enemies) {
-          if (!e.alive || dist(e.pos, to) > e.radius + b.radius) continue;
-          const dir = norm(b.vel);
-          e.hp -= b.damage;
-          e.flash = 0.08;
-          e.push = add(e.push, scale(dir, CONFIG.flintlock.knockback * 8));
-          b.life = 0;
-          if (e.hp <= 0) {
-            e.alive = false;
-            this.events.push({ type: "enemyDeath", pos: { ...e.pos }, dir, kind: e.kind });
-          } else {
-            this.events.push({ type: "enemyHit", pos: { ...e.pos }, dir, enemy: e.id });
-          }
-          break;
-        }
-      } else if (this.player.alive && dist(this.player.pos, to) < CONFIG.player.radius + b.radius) {
-        if (this.hurtPlayer(b.damage, norm(b.vel))) b.life = 0;
+      const dir = norm(b.vel);
+      // the player's and the minions' bullets hit guards; guards' bullets hit the player and minions
+      const hostileTeam: Team = b.from === "enemy" ? "minion" : "enemy";
+      for (const u of this.units) {
+        if (!u.alive || u.team !== hostileTeam || dist(u.pos, to) > u.radius + b.radius) continue;
+        this.hurtUnit(u, b.from === "enemy" ? CONFIG.hitOnMinion : b.damage, dir);
+        b.life = 0;
+        break;
+      }
+      if (b.life > 0 && b.from === "enemy" && this.player.alive && dist(this.player.pos, to) < CONFIG.player.radius + b.radius) {
+        if (this.hurtPlayer(b.damage, dir)) b.life = 0;
       }
     }
     this.bullets = this.bullets.filter((b) => b.life > 0);

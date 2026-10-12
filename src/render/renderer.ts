@@ -5,7 +5,7 @@
  */
 import { Container, Graphics, RenderTexture, Sprite, Text, Texture, type Renderer } from "pixi.js";
 import { CONFIG } from "../game/config.js";
-import type { Cover, Enemy, GameEvent, World } from "../game/world.js";
+import type { Corpse, Cover, GameEvent, Soul, Unit, World } from "../game/world.js";
 import type { Vec } from "../game/math.js";
 import { PAL } from "../palette.js";
 
@@ -35,6 +35,9 @@ export class GameRenderer {
   private stamp = new Graphics(); // drawn into the decal texture, then cleared
   private stampDirty = false;
   private coversG = new Graphics();
+  private corpsesG = new Graphics();
+  private soulsG = new Graphics();
+  private hintText: Text;
   private actorsG = new Graphics();
   private bulletsG = new Graphics();
   private fxG = new Graphics();
@@ -49,13 +52,15 @@ export class GameRenderer {
   private viewScale = 1;
   private viewOffset: Vec = { x: 0, y: 0 };
   private telegraphs = new Map<number, number>(); // enemy id -> seconds of red warning
+  private failText = "";
+  private failTime = 0;
 
   constructor(private renderer: Renderer) {
     const { width, height } = CONFIG.room;
     this.decals = RenderTexture.create({ width, height });
     this.decalSprite = new Sprite(this.decals);
     this.drawFloor();
-    this.camLayer.addChild(this.floor, this.decalSprite, this.coversG, this.actorsG, this.bulletsG, this.fxG);
+    this.camLayer.addChild(this.floor, this.decalSprite, this.corpsesG, this.coversG, this.actorsG, this.soulsG, this.bulletsG, this.fxG);
 
     this.vignette = new Sprite(makeVignette());
     this.vignette.width = VIEW_W;
@@ -64,6 +69,9 @@ export class GameRenderer {
     const style = { fontFamily: "Georgia, 'Times New Roman', serif", fill: PAL.hudText };
     this.hudText = new Text({ text: "", style: { ...style, fontSize: 26 } });
     this.hudText.position.set(40, 96);
+    this.hintText = new Text({ text: "", style: { ...style, fontSize: 22, fill: PAL.ember } });
+    this.hintText.anchor.set(0.5);
+    this.camLayer.addChild(this.hintText);
     this.bannerText = new Text({ text: "", style: { ...style, fontSize: 56, align: "center" } });
     this.bannerText.anchor.set(0.5);
     this.bannerText.position.set(VIEW_W / 2, VIEW_H * 0.42);
@@ -111,8 +119,35 @@ export class GameRenderer {
         case "enemyDeath":
           this.spray(e.pos, e.dir, 40, 1.6);
           this.chunks(e.pos, e.dir, 7);
-          this.corpse(e.pos, e.dir, e.kind === "halberdier" ? PAL.guardCoatMid : PAL.gunnerCoatMid);
+          this.bloodPool(e.pos, e.dir);
           this.addShake(12);
+          break;
+        case "minionHit":
+          for (let i = 0; i < 8; i++) this.spawn(e.pos, e.dir.x * rnd(80, 260) + rnd(-80, 80), e.dir.y * rnd(80, 260) + rnd(-80, 80), rnd(0.2, 0.5), rnd(2, 5), PAL.minion, "chunk");
+          this.addShake(3);
+          break;
+        case "minionDeath":
+          // the dead fall apart into ash and bone dust
+          for (let i = 0; i < 18; i++) this.spawn(e.pos, rnd(-160, 160), rnd(-200, 40), rnd(0.4, 0.9), rnd(6, 14), PAL.smoke, "smoke");
+          for (let i = 0; i < 10; i++) this.spawn(e.pos, rnd(-140, 140), rnd(-140, 140), rnd(0.3, 0.7), rnd(2, 4), PAL.soul, "spark");
+          this.addShake(4);
+          break;
+        case "soulPickup":
+          for (let i = 0; i < 16; i++) this.spawn(e.pos, rnd(-180, 180), rnd(-180, 180), rnd(0.2, 0.5), rnd(1.5, 3.5), PAL.soul, "spark");
+          break;
+        case "raise":
+          // the corpse stands up in a burst of black mist and embers
+          for (let i = 0; i < 24; i++) this.spawn(e.pos, rnd(-90, 90), rnd(-160, 20), rnd(0.4, 0.9), rnd(10, 24), PAL.ink, "mist");
+          for (let i = 0; i < 20; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-260, -40), rnd(0.3, 0.8), rnd(1.5, 3.5), PAL.ember, "spark");
+          this.addShake(8);
+          break;
+        case "raiseFail":
+          for (let i = 0; i < 6; i++) this.spawn(e.pos, rnd(-60, 60), rnd(-90, -20), rnd(0.2, 0.4), rnd(6, 10), PAL.smoke, "smoke");
+          this.failText = e.reason === "noSouls" ? "Brak dusz" : "Limit sług";
+          this.failTime = 1.2;
+          break;
+        case "command":
+          for (let i = 0; i < 12; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-120, 120), rnd(0.3, 0.6), rnd(1.5, 3), PAL.ember, "spark");
           break;
         case "playerHit":
           this.spray(e.pos, e.dir, 10, 0.8);
@@ -171,7 +206,10 @@ export class GameRenderer {
 
     this.flushStamps();
     this.drawCovers(world.covers);
+    this.drawCorpses(world);
     this.drawActors(world);
+    this.drawSouls(world.souls, world.time);
+    this.drawOrder(world);
     this.drawBullets(world);
     this.drawParticles();
     this.drawHud(world, started);
@@ -223,16 +261,59 @@ export class GameRenderer {
     this.markStamp();
   }
 
-  private corpse(pos: Vec, dir: Vec, coat: number): void {
-    const x = pos.x + dir.x * 20;
-    const y = pos.y + dir.y * 20;
-    this.splat(x, y + 6, 46, PAL.bloodDark);
-    this.splat(x + dir.x * 30, y + dir.y * 30, 28, PAL.blood);
-    const s = this.stamp;
-    s.ellipse(x, y, 30, 16).fill(PAL.ink);
-    s.ellipse(x - 4, y - 3, 24, 11).fill(coat);
-    s.circle(x + 22 * Math.sign(dir.x || 1), y - 4, 9).fill(PAL.ink);
-    this.markStamp();
+  /** The pool under a fresh corpse stays on the floor even after the body gets up. */
+  private bloodPool(pos: Vec, dir: Vec): void {
+    this.splat(pos.x + dir.x * 10, pos.y + 8, 46, PAL.bloodDark);
+    this.splat(pos.x + dir.x * 40, pos.y + dir.y * 30, 28, PAL.blood);
+  }
+
+  /** Bodies on the floor. Fresh ones (still raisable) breathe a faint ember glow. */
+  private drawCorpses(world: World): void {
+    const g = this.corpsesG;
+    g.clear();
+    const best = world.raisableCorpse();
+    for (const c of world.corpses) this.drawCorpse(g, c, c === best, world.time);
+    if (best && world.player.alive) {
+      this.hintText.text = `[E] wskrześ (${world.player.souls} ${soulsWord(world.player.souls)})`;
+      this.hintText.position.set(best.pos.x, best.pos.y - 46);
+    } else {
+      this.hintText.text = "";
+    }
+  }
+
+  private drawCorpse(g: Graphics, c: Corpse, selected: boolean, time: number): void {
+    const side = Math.sign(c.dir.x || 1);
+    const x = c.pos.x + c.dir.x * 18;
+    const y = c.pos.y + 10;
+    const coat = c.fromMinion ? PAL.minionMid : c.kind === "halberdier" ? PAL.guardCoatMid : PAL.gunnerCoatMid;
+    if (c.echo > 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 6 + c.id);
+      const a = (selected ? 0.45 : 0.18) * (0.6 + 0.4 * pulse) * Math.min(1, c.echo / 1.5);
+      g.ellipse(x, y, 44, 24).fill({ color: PAL.ember, alpha: a });
+    }
+    g.ellipse(x, y, 32, 15).fill(PAL.ink);
+    g.ellipse(x - 3 * side, y - 2, 25, 10).fill(coat);
+    g.circle(x + 24 * side, y - 3, 9).fill(PAL.ink);
+    g.circle(x + 24 * side, y - 4, 6).fill(c.fromMinion ? PAL.minion : 0x6e5a48);
+    // limp arm and the dropped weapon
+    g.moveTo(x - 6 * side, y + 6).lineTo(x - 30 * side, y + 14).stroke({ width: 4, color: PAL.ink, cap: "round" });
+    if (selected) g.ellipse(x, y, 40, 20).stroke({ width: 2, color: PAL.ember, alpha: 0.8 });
+  }
+
+  /** Souls hover over fresh corpses: a pale flame the player must walk through. */
+  private drawSouls(souls: Soul[], time: number): void {
+    const g = this.soulsG;
+    g.clear();
+    for (const s of souls) {
+      const fade = Math.min(1, s.life / 1.2);
+      const bob = Math.sin(time * 4 + s.id) * 4;
+      const x = s.pos.x;
+      const y = s.pos.y + bob;
+      g.circle(x, y, 22).fill({ color: PAL.soul, alpha: 0.12 * fade });
+      g.circle(x, y, 13).fill({ color: PAL.soul, alpha: 0.25 * fade });
+      g.poly([x - 7, y + 4, x, y - 16 - Math.sin(time * 9 + s.id) * 3, x + 7, y + 4, x, y + 9]).fill({ color: PAL.soul, alpha: 0.9 * fade });
+      g.circle(x, y + 1, 3).fill({ color: 0xffffff, alpha: fade });
+    }
   }
 
   // ---------------------------------------------------------------- actors
@@ -266,11 +347,22 @@ export class GameRenderer {
     }
   }
 
+  /** Where the minions were sent with Q. */
+  private drawOrder(world: World): void {
+    if (!world.order) return;
+    const g = this.soulsG; // cleared in drawSouls just before, never by the particle pass
+    const { pos, time } = world.order;
+    const a = Math.min(1, time) * 0.7;
+    g.circle(pos.x, pos.y, 28).stroke({ width: 3, color: PAL.ember, alpha: a });
+    g.moveTo(pos.x - 12, pos.y).lineTo(pos.x + 12, pos.y).stroke({ width: 3, color: PAL.ember, alpha: a });
+    g.moveTo(pos.x, pos.y - 12).lineTo(pos.x, pos.y + 12).stroke({ width: 3, color: PAL.ember, alpha: a });
+  }
+
   private drawActors(world: World): void {
     const g = this.actorsG;
     g.clear();
     // draw back to front by y so overlaps read correctly in 3/4 view
-    const actors: { y: number; draw: () => void }[] = world.enemies.map((e) => ({ y: e.pos.y, draw: () => this.drawEnemy(e, world) }));
+    const actors: { y: number; draw: () => void }[] = world.units.map((u) => ({ y: u.pos.y, draw: () => this.drawUnit(u, world) }));
     if (world.player.alive) actors.push({ y: world.player.pos.y, draw: () => this.drawPlayer(world) });
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
@@ -331,19 +423,26 @@ export class GameRenderer {
     }
   }
 
-  private drawEnemy(e: Enemy, world: World): void {
+  private drawUnit(e: Unit, world: World): void {
     const g = this.actorsG;
     const { x, y } = e.pos;
-    const face = world.player.pos.x >= x ? 1 : -1;
+    const minion = e.team === "minion";
+    const face = minion ? (e.dir.x >= 0 ? 1 : -1) : world.player.pos.x >= x ? 1 : -1;
     const flash = e.flash > 0;
-    const coat = flash ? 0xffffff : e.kind === "halberdier" ? PAL.guardCoat : PAL.gunnerCoat;
-    const coatMid = flash ? 0xffffff : e.kind === "halberdier" ? PAL.guardCoatMid : PAL.gunnerCoatMid;
+    const coat = flash ? 0xffffff : minion ? PAL.minion : e.kind === "halberdier" ? PAL.guardCoat : PAL.gunnerCoat;
+    const coatMid = flash ? 0xffffff : minion ? PAL.minionMid : e.kind === "halberdier" ? PAL.guardCoatMid : PAL.gunnerCoatMid;
     const top = y - 70;
     g.ellipse(x, y + 16, 24, 8).fill({ color: PAL.ink, alpha: 0.6 });
+    if (minion) {
+      // black mist curling at the feet; it thins out as the body nears its end
+      const left = Math.min(1, e.lifetime / 6);
+      g.ellipse(x, y + 12, 34, 12).fill({ color: PAL.ink, alpha: 0.35 + 0.25 * left });
+      if (e.lifetime < 6 && Math.floor(world.time * 8) % 2 === 0) return; // flickers before crumbling
+    }
 
-    // telegraph: a red line along the attack direction
+    // telegraph: a red line along the attack direction (only hostile guards warn the player)
     const warn = this.telegraphs.get(e.id) ?? 0;
-    if (e.state === "windup" || e.state === "aim" || warn > 0) {
+    if (!minion && (e.state === "windup" || e.state === "aim" || warn > 0)) {
       const reach = e.kind === "halberdier" ? 260 : 900;
       const a = e.state === "windup" || e.state === "aim" ? 0.55 : 0.25;
       g.moveTo(x, y - 30).lineTo(x + e.dir.x * reach, y - 30 + e.dir.y * reach).stroke({ width: e.kind === "halberdier" ? 10 : 2, color: PAL.telegraph, alpha: a });
@@ -354,7 +453,12 @@ export class GameRenderer {
     g.poly([x + 2 * face, top + 20, x + 18 * face, top + 20, x + 24 * face, top + 82, x + 2 * face, top + 82]).fill({ color: coatMid, alpha: 0.9 });
     g.rect(x - 20, top + 50, 40, 5).fill(PAL.ink);
     // head: morion helmet (halberdier) or wide hat (arquebusier)
-    g.circle(x + 2 * face, top + 12, 11).fill(flash ? 0xffffff : 0x8a6e58).stroke({ width: 4, color: PAL.ink });
+    g.circle(x + 2 * face, top + 12, 11).fill(flash ? 0xffffff : minion ? PAL.minion : 0x8a6e58).stroke({ width: 4, color: PAL.ink });
+    if (minion) {
+      g.circle(x + 6 * face, top + 12, 7).fill({ color: PAL.ember, alpha: 0.25 });
+      g.circle(x + 3 * face, top + 11, 2).fill(PAL.ember);
+      g.circle(x + 9 * face, top + 11, 1.6).fill(PAL.ember);
+    }
     if (e.kind === "halberdier") {
       g.poly([x - 18, top + 6, x - 8, top - 6, x + 10, top - 8, x + 20, top + 4, x + 2, top + 2]).fill(PAL.steel).stroke({ width: 4, color: PAL.ink });
       // halberd: pole and blade along e.dir (raised during the wind-up)
@@ -469,6 +573,7 @@ export class GameRenderer {
   private drawHud(world: World, started: boolean): void {
     const g = this.hudG;
     g.clear();
+    this.failTime = Math.max(0, this.failTime - 1 / 60);
     const p = world.player;
     // hearts, two halves each
     for (let i = 0; i < CONFIG.player.maxHalves / 2; i++) {
@@ -483,7 +588,11 @@ export class GameRenderer {
     }
     const w = p.weapon;
     const status = w.reloadLeft > 0 ? "ładuje…" : `${w.loaded}/${w.capacity}`;
-    this.hudText.text = `${w.name}  ·  ${status}\nStrażników: ${world.enemies.length}`;
+    const minions = world.minions.length;
+    this.hudText.text =
+      `${w.name}  ·  ${status}\n` +
+      `Dusze: ${p.souls}   Sługi: ${minions}/${CONFIG.necro.minionLimit}   Strażników: ${world.enemies.length}` +
+      (this.failTime > 0 ? `\n${this.failText}` : "");
 
     if (!started) this.bannerText.text = "PROFANUM\nKliknij, aby zacząć";
     else if (!p.alive) this.bannerText.text = "NIE ŻYJESZ\n[Enter] od nowa";
@@ -499,6 +608,14 @@ export class GameRenderer {
 // ------------------------------------------------------------------ helpers
 function rnd(a: number, b: number): number {
   return a + Math.random() * (b - a);
+}
+
+/** Polish plural for "dusza" (soul). */
+function soulsWord(n: number): string {
+  if (n === 1) return "dusza";
+  const last = n % 10;
+  const lastTwo = n % 100;
+  return last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? "dusze" : "dusz";
 }
 
 function clampCam(c: number, worldSize: number, view: number): number {
