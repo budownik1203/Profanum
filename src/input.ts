@@ -13,6 +13,10 @@ export class Input {
   private keys = new Set<string>();
   private pressed = new Set<string>();
   private mouseDown = false;
+  /** The left button is held right now (without this frame's one-shot click). */
+  get mouseHeld(): boolean {
+    return this.mouseDown;
+  }
   private wheel = 0;
   /** Mouse position in screen (canvas CSS) pixels. */
   mouse: Vec = { x: 0, y: 0 };

@@ -733,7 +733,7 @@ async function boot(): Promise<void> {
         while (acc >= STEP && steps < MAX_STEPS) {
           const aim = view.screenToWorld(input.mouse);
           const held = input.read(aim);
-          const stepInput: InputState = first ? held : { ...idleInput(aim), move: held.move, shoot: held.shoot };
+          const stepInput: InputState = first ? held : { ...idleInput(aim), move: held.move, shoot: input.mouseHeld }; // a click counts once per frame
           let events: GameEvent[];
           if (mode === "hub" && hub) {
             hub.update(STEP, stepInput);
@@ -811,7 +811,7 @@ async function boot(): Promise<void> {
     // ---- overlays
     if (mode === "summary" && summary) {
       screens.summary(summary.victory ? t("sum.victory") : t("sum.death"), summary.lines, summary.victory ? 0xf4e2a8 : PAL.heart, t("sum.continue"));
-      if ((accept || clicked) && time - summaryAt > 1.0) {
+      if ((accept || clicked) && time - summaryAt > CONFIG.ui.summaryLock) {
         input.releaseMouse();
         summary = null;
         enterHub();

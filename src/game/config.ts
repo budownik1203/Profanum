@@ -4,6 +4,8 @@
  * The player sprite is ~96 px tall at 1080p (see the design doc), the collision circle is smaller.
  */
 export const CONFIG = {
+  /** Seconds the run summary ignores input (a dying click must not skip it). */
+  ui: { summaryLock: 1.0 },
   room: { width: 1800, height: 1100, wall: 48, door: 150 },
 
   player: {
