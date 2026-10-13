@@ -146,10 +146,20 @@ function freshLegend(w: World): LegendId | null {
 /** Each boss leaves its prize, Echo of Souls (kept after death) and the way down. */
 export const BOSS_PRIZE: Partial<Record<UnitKind, { weapon?: WeaponId; remains?: LegendId; echo: number }>> = {
   executioner: { remains: "headsman", echo: 10 },
+  exorcist: { remains: "gerwazy", echo: 10 },
+  mourner: { remains: "lament", echo: 10 },
   captain: { weapon: "captainarq", echo: 12 },
+  ratcatcher: { weapon: "hakownica", echo: 12 },
+  mobleader: { weapon: "petronel", echo: 12 },
   powdermaster: { weapon: "mortar", echo: 14 },
+  usurer: { weapon: "doublepistol", echo: 14 },
+  lampmaster: { weapon: "blunderbuss", echo: 14 },
   bishop: { remains: "martyrs", echo: 16 },
+  abbot: { remains: "martyrs", echo: 16 },
+  scriptor: { weapon: "ashbook", echo: 16 },
   grandinquisitor: { weapon: "inqcrossbow", remains: "gerwazy", echo: 18 },
+  organist: { weapon: "organ", echo: 18 },
+  glassangel: { remains: "gerwazy", echo: 18 },
   holyflame: { echo: 40 },
 };
 

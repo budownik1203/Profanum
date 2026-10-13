@@ -2,14 +2,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { playRun } from "./runner.js";
+import { FLOORS } from "../src/game/data/floors.js";
 
 test("a whole run can be played from the first room to the death of the Holy Flame", () => {
   const r = playRun(1068, { god: true });
   assert.equal(r.victory, true, `the run ended on floor ${r.depth}: ${r.problems.join("; ")}`);
-  assert.deepEqual(
-    r.bosses.map((b) => b.kind),
-    ["executioner", "captain", "powdermaster", "bishop", "grandinquisitor", "holyflame"],
-  );
+  // one boss from each floor's three, then the Flame
+  const met = r.bosses.map((b) => b.kind);
+  assert.equal(met.length, 6, met.join(", "));
+  FLOORS.forEach((f, i) => assert.ok((f.bosses as string[]).includes(met[i]), `${met[i]} belongs to ${f.id}`));
+  assert.equal(met[5], "holyflame");
   assert.ok(r.rooms >= 40, `walked through ${r.rooms} rooms`);
   assert.ok(r.secrets >= 1, "found the catacombs at least once");
   assert.ok(!r.problems.some((p) => p.includes("non-number")), r.problems.join("; "));

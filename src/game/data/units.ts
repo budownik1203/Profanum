@@ -15,9 +15,14 @@ export type UnitKind =
   // the Church and the Inquisition
   | "monk" | "flagellant" | "inquisitor" | "knight" | "bellringer" | "acolyte"
   // others
-  | "mimic" | "abomination"
-  // bosses
-  | "executioner" | "captain" | "powdermaster" | "bishop" | "grandinquisitor" | "holyflame";
+  | "mimic" | "abomination" | "rat"
+  // bosses: three a floor, then the Holy Flame
+  | "executioner" | "exorcist" | "mourner"
+  | "captain" | "ratcatcher" | "mobleader"
+  | "powdermaster" | "usurer" | "lampmaster"
+  | "bishop" | "abbot" | "scriptor"
+  | "grandinquisitor" | "organist" | "glassangel"
+  | "holyflame";
 
 /** Decides how a unit reacts to the necromancer's minions (design doc: Frakcje). */
 export type Faction = "guard" | "church" | "mob" | "occult" | "beast" | "undead" | "boss";
@@ -210,12 +215,28 @@ export const UNITS: Record<UnitKind, UnitDef> = {
     engageRange: 120, windup: 0.5, recover: 0.8, melee: 8, area: 100,
     gold: [0, 0], raisable: false, size: 1.45,
   }),
+  // the rat-catcher's rats: fast, weak, many (raised, they make a fine swarm)
+  rat: D({
+    kind: "rat", faction: "beast", ai: "rusher", hp: 2, radius: 11, speed: 210,
+    reach: 34, windup: 0.3, recover: 0.5, melee: 1,
+    gold: [0, 0], raisable: true, size: 0.5,
+  }),
   // ---------------------------------------------------------------- bosses (scripts in bosses.ts)
   executioner: D({ kind: "executioner", faction: "boss", ai: "boss", hp: 260, radius: 40, speed: 125, melee: 6, gold: [20, 30], raisable: false, size: 1.7, boss: true }),
+  exorcist: D({ kind: "exorcist", faction: "boss", ai: "boss", hp: 250, radius: 30, speed: 115, melee: 5, gold: [20, 30], raisable: false, size: 1.5, boss: true }),
+  mourner: D({ kind: "mourner", faction: "boss", ai: "boss", hp: 240, radius: 30, speed: 120, melee: 5, gold: [20, 30], raisable: false, size: 1.55, boss: true }),
   captain: D({ kind: "captain", faction: "boss", ai: "boss", hp: 300, radius: 32, speed: 150, melee: 5, gold: [25, 35], raisable: false, size: 1.5, boss: true }),
+  ratcatcher: D({ kind: "ratcatcher", faction: "boss", ai: "boss", hp: 270, radius: 32, speed: 135, melee: 5, gold: [25, 35], raisable: false, size: 1.5, boss: true }),
+  mobleader: D({ kind: "mobleader", faction: "boss", ai: "boss", hp: 310, radius: 36, speed: 125, melee: 6, gold: [25, 35], raisable: false, size: 1.6, boss: true }),
   powdermaster: D({ kind: "powdermaster", faction: "boss", ai: "boss", hp: 320, radius: 34, speed: 115, melee: 5, gold: [30, 40], raisable: false, size: 1.65, boss: true }),
+  usurer: D({ kind: "usurer", faction: "boss", ai: "boss", hp: 270, radius: 40, speed: 85, melee: 5, gold: [45, 60], raisable: false, size: 1.6, boss: true }),
+  lampmaster: D({ kind: "lampmaster", faction: "boss", ai: "boss", hp: 290, radius: 30, speed: 140, melee: 5, gold: [30, 40], raisable: false, size: 1.55, boss: true }),
   bishop: D({ kind: "bishop", faction: "boss", ai: "boss", hp: 360, radius: 54, speed: 70, melee: 6, gold: [30, 40], raisable: false, size: 1.6, boss: true }),
+  abbot: D({ kind: "abbot", faction: "boss", ai: "boss", hp: 360, radius: 36, speed: 85, melee: 6, gold: [30, 40], raisable: false, size: 1.6, boss: true }),
+  scriptor: D({ kind: "scriptor", faction: "boss", ai: "boss", hp: 340, radius: 30, speed: 115, melee: 5, gold: [30, 40], raisable: false, size: 1.5, boss: true }),
   grandinquisitor: D({ kind: "grandinquisitor", faction: "boss", ai: "boss", hp: 380, radius: 36, speed: 140, melee: 6, gold: [35, 45], raisable: false, size: 1.6, boss: true }),
+  organist: D({ kind: "organist", faction: "boss", ai: "boss", hp: 380, radius: 40, speed: 0, melee: 6, gold: [35, 45], raisable: false, size: 1.5, boss: true }),
+  glassangel: D({ kind: "glassangel", faction: "boss", ai: "boss", hp: 400, radius: 44, speed: 95, melee: 6, gold: [35, 45], raisable: false, size: 1.9, boss: true }),
   holyflame: D({ kind: "holyflame", faction: "boss", ai: "boss", hp: 560, radius: 70, speed: 70, melee: 8, gold: [0, 0], raisable: false, size: 2.4, boss: true }),
 };
 
@@ -225,4 +246,11 @@ export function teamOf(kind: UnitKind): "enemy" | "feral" {
   return f === "occult" || f === "undead" ? "feral" : "enemy";
 }
 
-export const BOSS_KINDS: UnitKind[] = ["executioner", "captain", "powdermaster", "bishop", "grandinquisitor", "holyflame"];
+export const BOSS_KINDS: UnitKind[] = [
+  "executioner", "exorcist", "mourner",
+  "captain", "ratcatcher", "mobleader",
+  "powdermaster", "usurer", "lampmaster",
+  "bishop", "abbot", "scriptor",
+  "grandinquisitor", "organist", "glassangel",
+  "holyflame",
+];

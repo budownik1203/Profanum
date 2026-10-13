@@ -504,7 +504,7 @@ export class GameRenderer {
     const x = c.pos.x + c.dir.x * 18;
     const y = c.pos.y + 10;
     const coat = c.fromMinion ? PAL.minionMid : CORPSE_COLORS[c.kind] ?? PAL.guardCoatMid;
-    const big = c.big && c.echo <= 0 && c.raises < 2 ? 1.6 : 1;
+    const big = (c.big && c.echo <= 0 && c.raises < 2 ? 1.6 : 1) * (c.kind === "rat" ? 0.45 : 1);
     if (c.echo > 0) {
       const pulse = 0.5 + 0.5 * Math.sin(time * 6 + c.id);
       const a = (selected ? 0.45 : 0.18) * (0.6 + 0.4 * pulse) * Math.min(1, c.echo / 1.5);
@@ -645,7 +645,9 @@ export class GameRenderer {
     const h = Math.sin(tt * Math.PI) * l.height;
     g.ellipse(b.pos.x, b.pos.y, 10, 4).fill({ color: PAL.ink, alpha: 0.5 });
     // the landing spot is marked
-    g.circle(l.to.x, l.to.y, l.radius * (0.4 + 0.6 * tt)).stroke({ width: 2, color: b.side === "minion" ? PAL.ember : PAL.telegraph, alpha: 0.5 });
+    // (a flare only burns where it lands; its light reaches far, but light is not a blow)
+    const markR = l.land === "flare" ? 60 : l.radius;
+    g.circle(l.to.x, l.to.y, markR * (0.4 + 0.6 * tt)).stroke({ width: 2, color: b.side === "minion" ? PAL.ember : PAL.telegraph, alpha: 0.5 });
     const x = b.pos.x;
     const y = b.pos.y - h;
     switch (b.look) {
@@ -654,8 +656,29 @@ export class GameRenderer {
         g.circle(x + 8, y - 8, 8).fill(PAL.ember);
         break;
       case "flask":
-        g.circle(x, y, 8).fill(0x5a8a3a).stroke({ width: 3, color: PAL.ink });
+        g.circle(x, y, 8).fill(b.tint ?? 0x5a8a3a).stroke({ width: 3, color: PAL.ink });
+        g.rect(x - 3, y - 13, 6, 6).fill(0x8a7a5a).stroke({ width: 2, color: PAL.ink });
         break;
+      case "stone":
+        g.poly([x - 10, y - 4, x - 3, y - 10, x + 8, y - 6, x + 10, y + 4, x + 2, y + 10, x - 8, y + 6]).fill(0x6a6458).stroke({ width: 3, color: PAL.ink });
+        break;
+      case "trap": {
+        // an open iron trap tumbling through the air
+        const spin = tt * 9;
+        g.ellipse(x, y, 13, 13 * Math.abs(Math.cos(spin)) + 3).stroke({ width: 7, color: PAL.ink });
+        g.ellipse(x, y, 13, 13 * Math.abs(Math.cos(spin)) + 3).stroke({ width: 3, color: PAL.iron });
+        g.circle(x, y, 3).fill(PAL.iron);
+        break;
+      }
+      case "book": {
+        // a burning book, pages flapping
+        const flap = Math.sin(tt * 30) * 6;
+        g.poly([x - 13, y + 2, x, y + 6, x + 13, y + 2, x + 12, y - 8 - flap, x, y - 4, x - 12, y - 8 + flap]).fill(0x5a2a1a).stroke({ width: 3, color: PAL.ink });
+        g.moveTo(x, y + 6).lineTo(x, y - 4).stroke({ width: 2, color: 0xe8dcc0 });
+        g.circle(x, y - 10, 9).fill({ color: PAL.ember, alpha: 0.6 });
+        g.poly([x - 5, y - 6, x, y - 22 - flap * 0.5, x + 5, y - 6]).fill(PAL.emberHot);
+        break;
+      }
       default:
         g.circle(x, y, b.radius).fill(0x2a2620).stroke({ width: 3, color: PAL.ink });
         g.circle(x + 4, y - 6, 3).fill(PAL.emberHot);
@@ -691,6 +714,10 @@ export class GameRenderer {
           flame(h.x + 4, h.y - 1, 1.1, -flick * 2);
           break;
         }
+        case "streetlamp":
+          g.circle(x, y - 75, 26).fill({ color: PAL.ember, alpha: 0.22 });
+          flame(x, y - 68, 1, flick);
+          break;
         case "brazier":
           g.circle(x, y - 34, 30).fill({ color: PAL.ember, alpha: 0.2 });
           for (let i = 0; i < (l.hp < l.maxHp ? 2 : 4); i++) flame(x - 15 + i * 10, y - 26, 1.4, flick * (i % 2 ? -2 : 2));
@@ -917,6 +944,7 @@ const CORPSE_COLORS: Partial<Record<string, number>> = {
   acolyte: 0x7a6e5e,
   sergeant: 0x451a12,
   dog: 0x3a2e24,
+  rat: 0x4a3e34,
 };
 
 function drawBullet(g: Graphics, b: Bullet, time: number): void {
@@ -939,6 +967,14 @@ function drawBullet(g: Graphics, b: Bullet, time: number): void {
       g.moveTo(x, y - r * 0.6).lineTo(x, y + r * 0.6).stroke({ width: 2, color: 0xd8b04a });
       break;
     case "orb":
+      if (b.tint !== undefined) {
+        // a wax seal: a red disc with a stamped mark
+        g.circle(x, y, r + 6).fill({ color: b.tint, alpha: 0.25 });
+        g.circle(x, y, r).fill(b.tint).stroke({ width: 2, color: PAL.ink });
+        g.circle(x, y, r * 0.55).stroke({ width: 2, color: 0x5a0a08 });
+        g.moveTo(x - r * 0.3, y).lineTo(x + r * 0.3, y).stroke({ width: 2, color: 0x5a0a08 });
+        break;
+      }
       g.circle(x, y, r + 8).fill({ color: 0xc88aff, alpha: 0.22 });
       g.circle(x, y, r).fill(0x9a5ac8).stroke({ width: 2, color: PAL.ink });
       g.circle(x - r * 0.3, y - r * 0.3, r * 0.35).fill(0xf0d8ff);
@@ -955,6 +991,13 @@ function drawBullet(g: Graphics, b: Bullet, time: number): void {
       g.moveTo(x - dx * 7, y - dy * 7).lineTo(x + dx * 5, y + dy * 5).stroke({ width: r, color: 0xe8e0d0, cap: "round" });
       break;
     case "shard":
+      if (b.tint !== undefined) {
+        // stained glass: a long bright splinter with a glint
+        g.circle(x, y, r + 6).fill({ color: b.tint, alpha: 0.2 });
+        g.poly([x + dx * r * 1.4, y + dy * r * 1.4, x - dy * r * 0.5, y + dx * r * 0.5, x - dx * r * 1.1, y - dy * r * 1.1, x + dy * r * 0.5, y - dx * r * 0.5]).fill(b.tint).stroke({ width: 2, color: PAL.ink });
+        g.moveTo(x - dx * r * 0.4, y - dy * r * 0.4).lineTo(x + dx * r * 0.8, y + dy * r * 0.8).stroke({ width: 2, color: 0xffffff, alpha: 0.5 + 0.5 * Math.sin(time * 20 + x) });
+        break;
+      }
       g.poly([x + dx * r, y + dy * r, x - dy * r * 0.6, y + dx * r * 0.6, x - dx * r, y - dy * r, x + dy * r * 0.6, y - dx * r * 0.6]).fill(0x9a968c).stroke({ width: 2, color: PAL.ink });
       break;
     case "wave":
@@ -966,6 +1009,33 @@ function drawBullet(g: Graphics, b: Bullet, time: number): void {
       break;
     case "pellet":
       g.circle(x, y, r).fill(PAL.playerBullet).stroke({ width: 1.5, color: PAL.ink });
+      break;
+    case "coin": {
+      // a spinning gold coin
+      const sq = Math.abs(Math.sin(time * 14 + x * 0.05));
+      g.circle(x, y, r + 5).fill({ color: 0xd8b04a, alpha: 0.2 });
+      g.ellipse(x, y, r * (0.35 + 0.65 * sq), r).fill(0xe8c050).stroke({ width: 2, color: PAL.ink });
+      break;
+    }
+    case "page": {
+      const a = time * 6 + x * 0.03;
+      const c = Math.cos(a) * r;
+      const s = Math.sin(a) * r * 0.7;
+      g.poly([x - c - s * 0.5, y - s + c * 0.5, x + c - s * 0.5, y + s + c * 0.5, x + c + s * 0.5, y + s - c * 0.5, x - c + s * 0.5, y - s - c * 0.5]).fill(0xe8dcc0).stroke({ width: 1.5, color: PAL.ink });
+      g.moveTo(x - c * 0.5, y - s * 0.5).lineTo(x + c * 0.5, y + s * 0.5).stroke({ width: 1, color: 0x5a4a3a });
+      break;
+    }
+    case "note":
+      g.circle(x, y, r + 6).fill({ color: 0xf4e2a8, alpha: 0.2 });
+      g.ellipse(x - 2, y + 3, r * 0.75, r * 0.55).fill(0xf4e2a8).stroke({ width: 2, color: PAL.ink });
+      g.moveTo(x + r * 0.5, y + 2).lineTo(x + r * 0.5, y - r * 1.4).stroke({ width: 2.5, color: PAL.ink });
+      break;
+    case "tear":
+      g.circle(x, y, r + 5).fill({ color: 0x8ab4ff, alpha: 0.18 });
+      g.poly([x, y - r * 1.5, x + r * 0.8, y + r * 0.2, x, y + r, x - r * 0.8, y + r * 0.2]).fill(0xc8dcff).stroke({ width: 2, color: PAL.ink });
+      break;
+    case "stone":
+      g.poly([x - r, y - r * 0.4, x - r * 0.3, y - r, x + r * 0.8, y - r * 0.6, x + r, y + r * 0.4, x + r * 0.2, y + r, x - r * 0.8, y + r * 0.6]).fill(0x6a6458).stroke({ width: 2, color: PAL.ink });
       break;
     case "rosette":
     case "cross":

@@ -9,6 +9,7 @@ import { Floor } from "./floor.js";
 import { makePlayer, recomputeStats } from "./stats.js";
 import type { GameEvent, InputState, Player, RitualForm } from "./types.js";
 import type { World } from "./world.js";
+import type { UnitKind } from "./data/units.js";
 import { vec } from "./math.js";
 
 export interface RunStats {
@@ -49,6 +50,8 @@ export interface RunOptions {
   character?: CharacterId;
   pool?: string[];
   grace?: boolean;
+  /** Bosses chosen ahead for some floors (screenshots, tests). */
+  bosses?: Partial<Record<number, UnitKind>>;
 }
 
 export class Run {
@@ -70,6 +73,7 @@ export class Run {
     this.character = saved?.character ?? o.character ?? "grabarz";
     this.grace = saved?.grace ?? o.grace ?? false;
     this.pool = o.pool ?? STARTING_POOL;
+    this.forceBosses = o.bosses ?? {};
     this.player = makePlayer(this.character, vec());
     if (this.grace) {
       this.player.maxHalves += 2;
@@ -88,8 +92,11 @@ export class Run {
     return this.floor.world;
   }
 
+  /** Bosses chosen ahead for some floors (screenshots, tests). */
+  forceBosses: Partial<Record<number, UnitKind>> = {};
+
   private makeFloor(): Floor {
-    return new Floor(this.seed + this.depth * 7717, { depth: this.depth, player: this.player, pool: this.pool, grace: this.grace });
+    return new Floor(this.seed + this.depth * 7717, { depth: this.depth, player: this.player, pool: this.pool, grace: this.grace, boss: this.forceBosses[this.depth] });
   }
 
   update(dt: number, input: InputState): GameEvent[] {

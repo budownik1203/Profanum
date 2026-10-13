@@ -133,6 +133,8 @@ export interface Player {
   kills: number;
   /** Synergies already announced (a new one gets its moment on screen). */
   seenSynergies?: string[];
+  /** Seconds of being slowed (tears, ink, a sprung trap). */
+  slow?: number;
 }
 
 // ------------------------------------------------------------------ units
@@ -248,7 +250,7 @@ export interface Soul {
 
 // ------------------------------------------------------------------ light
 export type LightKind =
-  | "candle" | "candelabra" | "torch" | "chandelier" | "window" | "brazier" | "pyre"
+  | "candle" | "candelabra" | "torch" | "chandelier" | "window" | "brazier" | "pyre" | "streetlamp"
   | "lantern" | "flash" | "fire" | "censer" | "carried";
 
 export interface Light {
@@ -283,7 +285,8 @@ export interface Light {
 // ------------------------------------------------------------------ bullets & areas
 export type BulletLook =
   | "ball" | "pellet" | "bolt" | "orb" | "ember" | "holy" | "tooth" | "bone" | "shard" | "wave"
-  | "bomb" | "flask" | "torch" | "fireball" | "rosette" | "cross" | "ash";
+  | "bomb" | "flask" | "torch" | "fireball" | "rosette" | "cross" | "ash" | "coin" | "page" | "note" | "tear" | "stone"
+  | "trap" | "book";
 
 export type BulletEffect = "stun" | "slow" | "burn" | "fear" | "weep" | "ash" | "execute" | "split";
 
@@ -293,7 +296,7 @@ export interface Lob {
   t: number;
   dur: number;
   /** What happens on landing. */
-  land: "explode" | "fire" | "fireRing" | "holyRing" | "plague" | "keg" | "oil";
+  land: "explode" | "fire" | "fireRing" | "holyRing" | "plague" | "keg" | "oil" | "trap" | "miasma" | "ink" | "stone" | "flare";
   radius: number;
   height: number;
 }
@@ -343,9 +346,11 @@ export interface Bullet {
   pullTo?: Vec;
   /** Colour hint for the renderer. */
   tint?: number;
+  /** Walls it can still glance off (glass shards). */
+  bounce?: number;
 }
 
-export type ZoneKind = "fire" | "plague" | "exorcism" | "slam" | "holyfire" | "blast" | "glass";
+export type ZoneKind = "fire" | "plague" | "exorcism" | "slam" | "holyfire" | "blast" | "glass" | "trap" | "ink";
 
 /** A lasting or telegraphed area on the floor. */
 export interface Zone {
@@ -446,7 +451,7 @@ export interface Cover {
   broken: boolean;
 }
 
-export type CoverKind = "pew" | "table" | "coffin" | "cart" | "stall" | "tomb" | "pillar" | "crate" | "powder" | "oil" | "shelf";
+export type CoverKind = "pew" | "table" | "coffin" | "cart" | "stall" | "tomb" | "pillar" | "crate" | "powder" | "oil" | "shelf" | "organ";
 
 /** A doorway in one of the four walls, leading to another room of the floor. */
 export interface Door {
@@ -512,6 +517,7 @@ export type GameEvent =
   | { type: "relicNotReady" }
   | { type: "itemGet"; pos: Vec; item: string; kind: "weapon" | "item" | "relic" | "remains" }
   | { type: "synergy"; pos: Vec; id: string }
+  | { type: "trap"; pos: Vec }
   | { type: "legend"; pos: Vec; legend: LegendId }
   | { type: "ritual"; pos: Vec; form: RitualForm }
   | { type: "abomination"; pos: Vec; corpses: number }

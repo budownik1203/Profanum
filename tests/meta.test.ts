@@ -24,6 +24,7 @@ import { damageUnit } from "../src/game/combat.js";
 import { buildHub } from "../src/game/hub.js";
 import { nextSkullLine, SKULL_STORY } from "../src/narrator.js";
 import { makeRng, vec } from "../src/game/math.js";
+import { BOSS_KINDS } from "../src/game/data/units.js";
 import { DT, freeze, step } from "./helpers.js";
 
 test("the crypt's records survive a reload, and a broken save starts afresh", () => {
@@ -54,7 +55,7 @@ test("a finished run banks its echo, counts the dead and opens challenges", () =
   assert.equal(m.stats.runs, 1);
   assert.equal(m.stats.deaths, 1);
   assert.equal(m.stats.deepest, 2);
-  assert.deepEqual(fresh.sort(), ["killCaptain", "kills250", "raise20"]);
+  assert.deepEqual(fresh.sort(), ["beatSlums", "kills250", "raise20"]);
   assert.deepEqual(checkChallenges(m), [], "a challenge opens once");
 });
 
@@ -164,7 +165,7 @@ test("the skull tells its story in order, keeping back what the necromancer hasn
   assert.ok(b.index > a.index);
   // a victory unlocks the ending
   heard.push(b.index);
-  Object.assign(ctx, { wins: 1, deepest: 6, bosses: ["executioner", "captain", "powdermaster", "bishop", "grandinquisitor", "holyflame"] });
+  Object.assign(ctx, { wins: 1, deepest: 6, bosses: [...BOSS_KINDS] });
   let left = 0;
   while (nextSkullLine(heard, ctx).index >= 0) {
     heard.push(nextSkullLine(heard, ctx).index);

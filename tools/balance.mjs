@@ -7,10 +7,12 @@ import { makeRng, vec } from "../.test-build/src/game/math.js";
 import { setupBossArena } from "../.test-build/src/game/bosses.js";
 import { giveWeapon } from "../.test-build/src/game/stats.js";
 import { botInput, newBot } from "../.test-build/tests/bot.js";
+import { FLOORS } from "../.test-build/src/game/data/floors.js";
 
 const seeds = Number(process.argv[2] ?? 4);
-const weaponArg = process.argv[3];
-const BOSSES = [["executioner", 1], ["captain", 2], ["powdermaster", 3], ["bishop", 4], ["grandinquisitor", 5], ["holyflame", 6]];
+const weaponArg = process.argv[3] || undefined;
+const only = process.argv[4];
+const BOSSES = [...FLOORS.flatMap((f) => f.bosses.map((k) => [k, f.depth])), ["holyflame", 6]].filter(([k]) => !only || only.split(",").includes(k));
 const LOADOUT = { 1: "pistol", 2: "doublepistol", 3: "arquebus", 4: "petronel", 5: "organ", 6: "hakownica" };
 const DT = 1 / 60;
 for (const [kind, depth] of BOSSES) {

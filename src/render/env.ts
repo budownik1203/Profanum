@@ -292,6 +292,31 @@ export function drawCover(g: Graphics, c: Cover, t: number): void {
       } else drawFlippedSlab(g, c, 0x5a4428, 0x8a2a1e);
       break;
     }
+    case "organ": {
+      // the great organ: a carved case along the back wall and seven towers of tin pipes
+      const deck = y + h - 56;
+      g.rect(x - 10, y - 30, w + 20, h + 30).fill(0x2a1a10).stroke(ink);
+      for (let i = 0; i < 7; i++) {
+        const cx = x + 80 + i * 200;
+        // a wooden tower behind every rank of pipes, a gilded crest on top
+        g.rect(cx - 62, y - 40 - (i % 2) * 14, 124, deck - y + 40 + (i % 2) * 14).fill(0x3a2416).stroke({ width: 4, color: PAL.ink });
+        g.poly([cx - 30, y - 40 - (i % 2) * 14, cx, y - 64 - (i % 2) * 14, cx + 30, y - 40 - (i % 2) * 14]).fill(0xa8823e).stroke({ width: 3, color: PAL.ink });
+        for (let k = -2; k <= 2; k++) {
+          const px = cx + k * 22;
+          const top = deck - (120 - Math.abs(k) * 22 - (i % 2) * 12);
+          g.rect(px - 9, top, 18, deck - top).fill(k === 0 ? 0xc8c0b0 : 0xa8a090).stroke({ width: 3, color: PAL.ink });
+          g.rect(px + 2, top + 3, 5, deck - top - 6).fill({ color: PAL.ink, alpha: 0.28 });
+          g.ellipse(px, top, 9, 3).fill(0x6a645a).stroke({ width: 2, color: PAL.ink });
+          // the mouth
+          g.poly([px - 6, deck - 22, px + 6, deck - 22, px, deck - 32]).fill(PAL.ink);
+        }
+      }
+      // the console deck along the front
+      g.rect(x - 10, deck, w + 20, y + h - deck).fill(0x4a2e1a).stroke(ink);
+      g.rect(x - 10, deck, w + 20, 8).fill(0x8a6a3a);
+      for (let i = 0; i < 14; i++) g.circle(x + 50 + i * (w - 100) / 13, deck + 30, 5).fill(0xa8823e).stroke({ width: 2, color: PAL.ink });
+      break;
+    }
     case "shelf": {
       if (!c.flipped) {
         g.rect(x, y, w, h).fill(0x3e2c1c).stroke(ink);
@@ -403,6 +428,18 @@ export function drawFixture(g: Graphics, l: Light, w: World): void {
       g.moveTo(head.x, head.y + 18).lineTo(head.x, head.y).stroke({ width: 9, color: PAL.ink, cap: "round" });
       g.moveTo(head.x, head.y + 18).lineTo(head.x, head.y).stroke({ width: 5, color: PAL.wood, cap: "round" });
       g.ellipse(head.x, head.y, 7, 5).fill(l.on ? 0x2a1a10 : 0x1a1410).stroke(ink);
+      break;
+    }
+    case "streetlamp": {
+      // an iron post with a glass lantern on top
+      g.ellipse(x, y + 6, 22, 7).fill({ color: PAL.ink, alpha: 0.6 });
+      g.rect(x - 9, y - 4, 18, 10).fill(PAL.iron).stroke(ink);
+      g.moveTo(x, y).lineTo(x, y - 62).stroke({ width: 8, color: PAL.ink });
+      g.moveTo(x, y).lineTo(x, y - 62).stroke({ width: 4, color: PAL.iron });
+      g.moveTo(x - 12, y - 62).lineTo(x + 12, y - 62).stroke({ width: 5, color: PAL.ink });
+      g.poly([x - 11, y - 64, x + 11, y - 64, x + 9, y - 86, x - 9, y - 86]).fill(l.on ? 0x5a4020 : 0x1e1a16).stroke(ink);
+      g.poly([x - 12, y - 86, x, y - 96, x + 12, y - 86]).fill(PAL.iron).stroke(ink);
+      if (!l.on) g.moveTo(x - 6, y - 70).lineTo(x + 5, y - 80).stroke({ width: 2, color: 0x6a6660 }); // cracked glass
       break;
     }
     case "window": {
@@ -745,12 +782,24 @@ export function drawZone(g: Graphics, glow: Graphics, z: Zone, t: number): void 
       }
       break;
     }
-    case "plague":
+    case "plague": {
+      // a sickly cloud; a hostile one (rat poison) shows its edge, so you know where it eats
+      const hostile = z.side !== "minion";
+      const settling = z.warn > 0 ? 1 - z.warn / Math.max(0.01, z.warnMax ?? 1) : 1;
       for (let i = 0; i < 6; i++) {
         const a = t * 0.6 + i;
-        glow.circle(x + Math.cos(a) * z.radius * 0.4, y + Math.sin(a * 1.3) * z.radius * 0.3, z.radius * 0.5).fill({ color: 0x6a8a3a, alpha: 0.1 * fade });
+        glow.circle(x + Math.cos(a) * z.radius * 0.4 * settling, y + Math.sin(a * 1.3) * z.radius * 0.3 * settling, z.radius * 0.5 * settling).fill({ color: 0x6a8a3a, alpha: (hostile ? 0.16 : 0.1) * fade });
+      }
+      if (hostile) {
+        glow.circle(x, y, z.radius).stroke({ width: z.warn > 0 ? 3 : 2, color: 0x8ab43a, alpha: (z.warn > 0 ? 0.5 + 0.3 * Math.sin(t * 16) : 0.35) * fade });
+        for (let i = 0; i < 4; i++) {
+          // bubbles rising
+          const k = (t * 0.8 + i * 0.25 + hash(i, z.id)) % 1;
+          glow.circle(x + (hash(i + 7, z.id) - 0.5) * z.radius * 1.2, y - k * 50, 3 + 2 * (1 - k)).fill({ color: 0xb8d86a, alpha: 0.5 * (1 - k) * fade });
+        }
       }
       break;
+    }
     case "exorcism": {
       const warn = z.warn > 0;
       const pulse = 0.5 + 0.5 * Math.sin(t * 14);
@@ -761,6 +810,28 @@ export function drawZone(g: Graphics, glow: Graphics, z: Zone, t: number): void 
         glow.moveTo(x - z.radius * 0.7, y).lineTo(x + z.radius * 0.7, y).stroke({ width: 2, color: PAL.holy, alpha: 0.4 });
         glow.moveTo(x, y - z.radius * 0.7).lineTo(x, y + z.radius * 0.7).stroke({ width: 2, color: PAL.holy, alpha: 0.4 });
       }
+      break;
+    }
+    case "trap": {
+      // iron jaws in the dirt, sprung shut once stepped on
+      const armed = z.warn <= 0;
+      g.ellipse(x, y, z.radius, z.radius * 0.55).fill({ color: PAL.ink, alpha: 0.55 });
+      g.ellipse(x, y, z.radius * 0.8, z.radius * 0.42).stroke({ width: 4, color: PAL.iron });
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const px = x + Math.cos(a) * z.radius * 0.8;
+        const py = y + Math.sin(a) * z.radius * 0.42;
+        g.poly([px - 3, py, px, py - 7, px + 3, py]).fill(0x9a968c).stroke({ width: 1.5, color: PAL.ink });
+      }
+      g.circle(x, y, 4).fill(PAL.iron).stroke({ width: 2, color: PAL.ink });
+      if (armed) glow.ellipse(x, y, z.radius * 0.85, z.radius * 0.45).stroke({ width: 2, color: PAL.telegraph, alpha: 0.35 + 0.15 * Math.sin(t * 5) });
+      break;
+    }
+    case "ink": {
+      // a spreading puddle of black ink with a sheen
+      g.circle(x, y, z.radius).fill({ color: 0x07060a, alpha: 0.85 * fade });
+      g.ellipse(x - z.radius * 0.3, y - z.radius * 0.3, z.radius * 0.35, z.radius * 0.18).fill({ color: 0x3a3a5a, alpha: 0.5 * fade });
+      for (let i = 0; i < 5; i++) g.circle(x + Math.cos(i * 2.3 + z.id) * z.radius * 0.98, y + Math.sin(i * 2.3 + z.id) * z.radius * 0.98, 5 + (i % 3) * 3).fill({ color: 0x07060a, alpha: 0.8 * fade });
       break;
     }
     case "slam": {

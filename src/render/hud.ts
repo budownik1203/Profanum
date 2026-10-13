@@ -91,7 +91,8 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
     const where = holy ? t("hud.holy") : lit ? t("hud.lit") : t("hud.dark");
     const seen = w.alarm ? t("hud.seen") : t("hud.hidden");
     const burning = w.exposure > CONFIG.darkness.burnDelay * p.stats.burnDelayMul * 0.5 ? `  ·  ${t("hud.burning")}` : "";
-    tx.text(`${where}  ·  ${seen}${burning}`, 30, 140, { size: 22, color: holy ? 0xf4e2a8 : lit ? PAL.hudText : PAL.hudDim, stroke: true });
+    const slowed = (p.slow ?? 0) > 0 ? `  ·  ${t("hud.slowed")}` : "";
+    tx.text(`${where}  ·  ${seen}${burning}${slowed}`, 30, 140, { size: 22, color: holy ? 0xf4e2a8 : lit ? PAL.hudText : PAL.hudDim, stroke: true });
   }
 
   // ---------------------------------------------------------------- the weapon

@@ -87,7 +87,13 @@ export function botInput(w: World, m: BotMemory, dt: number, keep = 380): InputS
       const shielded = target.boss?.mem.shield === 1;
       // a few seconds on the lights, a few on the boss: a lit boss still bleeds, only less
       const lightTurn = shielded || w.time % 7 < 3;
-      if (lightTurn && (shielded || bossLit(w, target))) {
+      const windows = target.kind === "glassangel" && shielded ? w.lights.filter((l) => l.kind === "window" && !l.broken).sort((a, b) => dist(a.pos, p.pos) - dist(b.pos, p.pos)) : [];
+      if (windows[0]) {
+        // stained glass breaks from a shot into the wall behind it
+        input.aim = w.windowPoint(windows[0]);
+        if (p.current !== 0) input.slot = 0;
+        lightAim = true;
+      } else if (lightTurn && (shielded || bossLit(w, target))) {
         const lights = w.lights.filter((l) => l.on && PUTOUT_KINDS.includes(l.kind) && (shielded ? l.kind === "brazier" : dist(l.pos, target.pos) < l.radius) && dist(l.pos, p.pos) < 700);
         lights.sort((a, b) => dist(a.pos, p.pos) - dist(b.pos, p.pos));
         if (lights[0]) {

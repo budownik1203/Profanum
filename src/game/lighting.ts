@@ -9,7 +9,7 @@ import type { World } from "./world.js";
 import { damageUnit, hurtPlayer } from "./combat.js";
 
 /** Fixed lights the necromancer can shoot out (and a lamplighter can relight). */
-export const PUTOUT_KINDS: readonly LightKind[] = ["candle", "candelabra", "torch", "chandelier", "brazier", "pyre"];
+export const PUTOUT_KINDS: readonly LightKind[] = ["candle", "candelabra", "torch", "chandelier", "brazier", "pyre", "streetlamp"];
 
 export function updateLights(w: World, dt: number): void {
   for (const l of w.lights) {

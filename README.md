@@ -31,8 +31,8 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 | Polecenie | Co robi |
 | --- | --- |
 | `node tools/fullrun.mjs [n] [god\|mortal] [postać]` | Bot przechodzi całe wyprawy: czas, pokoje, utknięcia, bossowie, wydajność kroku |
-| `node tools/balance.mjs [n] [broń]` | Bot walczy z każdym bossem: czas zabicia i utracone serca |
-| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, items, crypt, audio) |
+| `node tools/balance.mjs [n] [broń] [bossowie]` | Bot walczy z każdym bossem: czas zabicia i utracone serca |
+| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, crypt, audio) |
 
 ## Sterowanie
 
@@ -60,10 +60,16 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
   Latarnicy zapalają zgaszone światła.
 - **Nekromancja**: zabici zostawiają trupy i dusze. Wskrzeszasz ich jako sługi, które zachowują rolę z życia.
   Z trzech trupów zszywasz abominację. Szczątki przeklętej broni wskrzeszasz na ołtarzu jako legendę.
-- **Wrogowie**: 25 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli).
+- **Wrogowie**: 26 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli) i szczury Szczurołapa.
   Okultyści walczą ze wszystkimi.
-- **Bossowie**: Kat Miejski, Kapitan Straży, Mistrz Prochu, Biskup Procesji, Wielki Inkwizytor i Święty Płomień.
-  Każdy ma swoją arenę i fazy, a ataki zapowiada na podłodze. W świetle jest silniejszy.
+- **Bossowie**: po trzech na piętro (piętro losuje jednego) i Święty Płomień na końcu:
+  - Cmentarz: Kat Miejski, Egzorcysta, Płaczka;
+  - Slumsy: Kapitan Straży, Szczurołap, Prowodyr Tłumu;
+  - Dzielnica kupiecka: Mistrz Prochu, Lichwiarz, Mistrz Latarników;
+  - Klasztor: Biskup Procesji, Opat, Skryptor;
+  - Katedra: Wielki Inkwizytor, Organista, Szklany Anioł.
+
+  Każdy ma swoją arenę i fazy, a ataki zapowiada na podłodze. W świetle jest silniejszy i każdy na swój sposób przywraca światło.
 - **Arsenał**: 18 broni (palne, kusze, okultystyczne za dusze), 4 legendy z klątwami, 18 przedmiotów,
   7 relikwii i 5 synergii.
 - **Krypta**: między wyprawami są tu sarkofagi 6 postaci z historiami, ołtarz Echa (odblokowania),
@@ -88,7 +94,9 @@ src/
     lighting.ts      światła, latarnicy, żyrandole, witraże
     loot.ts          łupy, skrzynie, Paser, ołtarze, wskrzeszanie
     relics.ts        relikwie i sznur Wiedźmy
-    bosses.ts        areny i skrypty bossów
+    bosskit.ts       narzędzia skryptów bossów (kroki, ruch, wzory pocisków, przywracanie światła)
+    bosses.ts        maszyneria bossów, pierwsi bossowie pięter i Święty Płomień
+    bosses2.ts       pozostałych dziesięciu bossów
     rooms.ts         szablony pokoi
     floor.ts         generator piętra i przejścia
     run.ts           cała wyprawa, zapis
@@ -107,7 +115,6 @@ tools/               budowa pliku HTML, zrzuty przez Chromium, balans i całe wy
 
 Gotowe są wszystkie elementy zakresu z dokumentu poza tymi, które dokument odkłada na później:
 
-- po 3 bossów na piętro (teraz jeden na piętro),
 - docelowe sprite'y cut-out (teraz parametryczne figury w kodzie),
 - nagrany narrator (teraz napisy),
 - wersja desktop i Steam.

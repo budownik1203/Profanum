@@ -145,7 +145,7 @@ export class World {
 
   // ---------------------------------------------------------------- building the room
   addCover(x: number, y: number, w: number, h: number, kind: CoverKind = "pew"): Cover {
-    const hp = kind === "pillar" ? Infinity : BARRELS.includes(kind) ? CONFIG.cover.barrelHp : kind === "tomb" || kind === "crate" ? CONFIG.cover.stoneHp : CONFIG.cover.hp;
+    const hp = kind === "pillar" || kind === "organ" ? Infinity : BARRELS.includes(kind) ? CONFIG.cover.barrelHp : kind === "tomb" || kind === "crate" ? CONFIG.cover.stoneHp : CONFIG.cover.hp;
     const c: Cover = { id: nextId(), x, y, w, h, kind, flipped: false, hp, broken: false };
     this.covers.push(c);
     return c;
@@ -493,8 +493,10 @@ export class World {
       p.vel = scale(p.dodgeDir, cfg.speed * CONFIG.dodge.speedMul);
       if (p.dodgeLeft <= 0) p.dodgeCooldown = CONFIG.dodge.cooldown * p.stats.dodgeCooldownMul;
     } else {
-      p.vel = scale(move, cfg.speed * heavy);
+      const slowed = (p.slow ?? 0) > 0 ? 0.6 : 1;
+      p.vel = scale(move, cfg.speed * heavy * slowed);
     }
+    if (p.slow) p.slow = Math.max(0, p.slow - dt);
 
     p.push = scale(p.push, Math.max(0, 1 - dt * 10));
     p.pos = add(p.pos, scale(add(p.vel, p.push), dt));

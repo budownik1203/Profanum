@@ -12,7 +12,7 @@ import { altarOffer, interactTarget, placePickup, shopPrice } from "./game/loot.
 import {
   buyCharacter, buyUnlock, characterState, clearRun, finishRun, loadMeta, loadRun, makeStore, poolOf, saveMeta, saveRun, type Meta,
 } from "./game/meta.js";
-import { Run } from "./game/run.js";
+import { Run, type RunOptions } from "./game/run.js";
 import { giveItem, giveRelic, giveWeapon, makePlayer } from "./game/stats.js";
 import type { GameEvent, InputState, PickupKind, Player } from "./game/types.js";
 import { World, idleInput } from "./game/world.js";
@@ -472,9 +472,9 @@ async function boot(): Promise<void> {
     get meta() {
       return meta;
     },
-    startRun(character: CharacterId = "grabarz", seed = 7) {
+    startRun(character: CharacterId = "grabarz", seed = 7, bosses?: Record<number, string>) {
       meta.selected = character;
-      startRun(new Run({ seed, character, pool: poolOf(meta) }), true);
+      startRun(new Run({ seed, character, pool: poolOf(meta), bosses: bosses as RunOptions["bosses"] }), true);
     },
     enterHub,
     descendTo(depth: number) {
@@ -553,6 +553,12 @@ async function boot(): Promise<void> {
     },
     measureAudio() {
       return GameAudio.measure();
+    },
+    /** No banners or narration on screen (screenshots). */
+    quiet() {
+      banner = null;
+      narrator.text = "";
+      narrator.time = 0;
     },
     /** Open an overlay directly (screenshots). */
     show(o: string) {

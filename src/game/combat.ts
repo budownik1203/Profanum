@@ -57,8 +57,10 @@ export interface HitOpts {
 /** Bosses fight for the light (design doc): in light they shrug hits off, in the dark they bleed. */
 export function bossTakenMul(w: World, u: Unit): number {
   if (!u.def.boss) return 1;
-  // the Holy Flame is shielded while its braziers burn
+  // the Holy Flame is shielded while its braziers burn, the Glass Angel while its windows stand
   if (u.boss?.mem.shield) return 0.4;
+  // the usurer behind his strongbox lid
+  if (u.boss?.mem.guard) return 0.15;
   return bossLit(w, u) ? 0.75 : 1.3;
 }
 
@@ -216,6 +218,22 @@ export function breakCover(w: World, c: Cover, fromPlayer: boolean): void {
 export function updateZones(w: World, dt: number): void {
   for (const z of w.zones) {
     if (!z.permanent) z.life -= dt;
+    if (z.kind === "trap") {
+      // an iron trap waits to be stepped on (by the necromancer or one of his dead)
+      if (z.warn > 0) {
+        z.warn -= dt;
+        continue;
+      }
+      const victim = w.player.alive && dist(w.player.pos, z.pos) < z.radius + CONFIG.player.radius * 0.5;
+      const minion = w.units.find((u) => u.alive && u.team === "minion" && dist(u.pos, z.pos) < z.radius + u.radius * 0.5);
+      if (victim || minion) {
+        if (victim && hurtPlayer(w, z.halves, vec())) w.player.slow = Math.max(w.player.slow ?? 0, 1.6);
+        if (minion) damageUnit(w, minion, z.burst, vec(), { side: z.side, knock: 0, effect: "slow", effectTime: 2 });
+        w.events.push({ type: "trap", pos: { ...z.pos } });
+        z.life = 0;
+      }
+      continue;
+    }
     if (z.warn > 0) {
       z.warn -= dt;
       if (z.warn <= 0) zoneBurst(w, z);
@@ -231,7 +249,7 @@ export function updateZones(w: World, dt: number): void {
       damageUnit(w, u, z.dps * 0.5, vec(), { fromPlayer: z.fromPlayer, side: z.side, knock: 0, effect: z.kind === "fire" || z.kind === "holyfire" ? "burn" : undefined, effectTime: 1 });
     }
     if (z.halves > 0 && z.side !== "minion" && w.player.alive && dist(w.player.pos, z.pos) < z.radius + CONFIG.player.radius * 0.5) {
-      hurtPlayer(w, z.halves, vec(), z.kind === "holyfire");
+      if (hurtPlayer(w, z.halves, vec(), z.kind === "holyfire") && z.kind === "ink") w.player.slow = Math.max(w.player.slow ?? 0, 1.5);
     }
   }
   const gone = w.zones.filter((z) => z.life <= 0);
@@ -362,6 +380,38 @@ function landLob(w: World, b: Bullet): void {
       w.events.push({ type: "fire", pos: { ...at }, radius: l.radius });
       addZone(w, { kind: "fire", pos: { ...at }, radius: l.radius, life: 9999, warn: 0, side: "none", dps: 4, burst: 0, halves: 1, permanent: true });
       break;
+    case "trap":
+      // an iron trap lands open and arms itself a moment later
+      w.events.push({ type: "bulletWall", pos: { ...at } });
+      addZone(w, { kind: "trap", pos: { ...at }, radius: l.radius, life: 20, warn: 0.45, side: b.side, dps: 0, burst: 4, halves: 1 });
+      break;
+    case "miasma":
+      // rat poison: a sickly cloud that hurts everyone but its thrower's side
+      addZone(w, { kind: "plague", pos: { ...at }, radius: l.radius, life: 5.5, warn: 0.5, side: b.side, dps: 3, burst: 0, halves: 1 });
+      break;
+    case "ink":
+      // a pot of ink bursts: black, sticky, slowing
+      w.events.push({ type: "bulletWall", pos: { ...at } });
+      addZone(w, { kind: "ink", pos: { ...at }, radius: l.radius, life: 8, warn: 0, side: b.side, dps: 2, burst: 0, halves: 1 });
+      break;
+    case "stone": {
+      // a thrown stone only hurts where it lands
+      w.events.push({ type: "coverHit", cover: -1, pos: { ...at } });
+      for (const u of w.units) {
+        if (u.alive && u.team !== b.side && dist(u.pos, at) < l.radius + u.radius) damageUnit(w, u, b.damage, norm(sub(u.pos, at)), { side: b.side, knock: 60 });
+      }
+      if (b.side !== "minion" && w.player.alive && dist(w.player.pos, at) < l.radius + CONFIG.player.radius) hurtPlayer(w, b.halves, norm(sub(w.player.pos, at)));
+      break;
+    }
+    case "flare": {
+      // a lamplighter's flare: a short fire and, for a few seconds, light over half the room
+      w.events.push({ type: "explosion", pos: { ...at }, radius: 50 });
+      addZone(w, { kind: "fire", pos: { ...at }, radius: 40, life: 3.5, warn: 0, side: b.side, dps: 3, burst: 0, halves: 1 });
+      const glare = w.addLight("fire", at, { radius: l.radius });
+      glare.life = 3.5;
+      ring(w, at, 10, 200, w.rng() * Math.PI, { side: b.side, radius: 9, look: "ember", life: 3, damage: 3, halves: 1 });
+      break;
+    }
   }
 }
 
@@ -421,6 +471,15 @@ export function updateBullets(w: World, dt: number): void {
     }
 
     if (to.x < W.x + wall || to.y < W.y + wall || to.x > W.x + W.w - wall || to.y > W.y + W.h - wall) {
+      if (b.bounce && b.bounce > 0) {
+        // glass glances off the wall
+        b.bounce -= 1;
+        if (to.x < W.x + wall || to.x > W.x + W.w - wall) b.vel = vec(-b.vel.x, b.vel.y);
+        if (to.y < W.y + wall || to.y > W.y + W.h - wall) b.vel = vec(b.vel.x, -b.vel.y);
+        b.pos = { x: clamp(to.x, W.x + wall + 1, W.x + W.w - wall - 1), y: clamp(to.y, W.y + wall + 1, W.y + W.h - wall - 1) };
+        w.events.push({ type: "bulletWall", pos: { ...b.pos } });
+        continue;
+      }
       b.life = 0;
       const at = { x: clamp(to.x, wall, W.w - wall), y: clamp(to.y, wall, W.h - wall) };
       w.events.push({ type: "bulletWall", pos: at });
@@ -517,6 +576,8 @@ export function updateBullets(w: World, dt: number): void {
         b.life = 0;
         // a chain hook drags the necromancer in
         if (b.pullTo) w.player.push = add(w.player.push, scale(norm(sub(b.pullTo, w.player.pos)), 1500));
+        // tears and ink weigh him down
+        if (b.effect === "slow" || b.effect === "weep") w.player.slow = Math.max(w.player.slow ?? 0, b.effectTime ?? 1.5);
       }
     }
   }

@@ -74,6 +74,7 @@ function feet(g: Graphics, x: number, y: number, s: number, m: Motion | undefine
 // ------------------------------------------------------------------ units
 export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: number, m?: Motion): void {
   if (e.kind === "dog") return drawDog(g, glow, e, w, warn);
+  if (e.kind === "rat") return drawRat(g, glow, e, w, warn);
   if (e.kind === "mimic") return drawMimic(g, glow, e, w);
   if (e.kind === "abomination") return drawAbomination(g, glow, e, w);
   if (e.def.boss) return drawBoss(g, glow, e, w);
@@ -421,6 +422,28 @@ function drawDog(g: Graphics, glow: Graphics, e: Unit, w: World, warn: number): 
   glow.circle(hx + face * 4, y - 24, 2).fill(minion ? PAL.ember : 0xffd090);
 }
 
+/** The rat-catcher's rats: small, fast, with a long bare tail. */
+function drawRat(g: Graphics, glow: Graphics, e: Unit, w: World, warn: number): void {
+  const minion = e.team === "minion";
+  const { x, y } = e.pos;
+  const face = e.dir.x >= 0 ? 1 : -1;
+  const col = e.flash > 0 ? 0xffffff : minion ? PAL.minion : 0x4a3e34;
+  const run = Math.sin(w.time * 26 + e.id) * 2;
+  const lunge = e.state === "windup" || warn > 0 ? 4 : 0;
+  g.ellipse(x, y + 4, 15, 4).fill({ color: PAL.ink, alpha: 0.6 });
+  // the tail whips behind
+  const tx = x - face * 12;
+  g.moveTo(tx, y - 6).quadraticCurveTo(tx - face * 12, y - 2 + run * 2, tx - face * 22, y - 8 - run).stroke({ width: 4, color: PAL.ink, cap: "round" });
+  g.moveTo(tx, y - 6).quadraticCurveTo(tx - face * 12, y - 2 + run * 2, tx - face * 22, y - 8 - run).stroke({ width: 2, color: e.flash > 0 ? 0xffffff : 0xb88a7a, cap: "round" });
+  // the hunched body and the pointed head
+  g.ellipse(x - face * 2 + lunge * face * 0.5, y - 8, 13, 8).fill(col).stroke({ width: 3, color: PAL.ink });
+  for (const dx of [-7, 5]) g.moveTo(x + dx, y - 3).lineTo(x + dx + run, y + 2).stroke({ width: 3, color: PAL.ink });
+  const hx = x + face * (11 + lunge);
+  g.poly([hx - face * 4, y - 15, hx + face * 9, y - 8, hx - face * 4, y - 3]).fill(col).stroke({ width: 3, color: PAL.ink });
+  g.circle(hx - face * 3, y - 15, 3.5).fill(e.flash > 0 ? 0xffffff : 0x8a6a5a).stroke({ width: 2, color: PAL.ink });
+  glow.circle(hx + face * 1, y - 10, 1.6).fill(minion ? PAL.ember : 0xff6a4a);
+}
+
 function drawMimic(g: Graphics, glow: Graphics, e: Unit, w: World): void {
   const { x, y } = e.pos;
   const bite = e.state === "strike" || e.state === "windup" ? 1 : Math.abs(Math.sin(w.time * 6)) * 0.5;
@@ -548,4 +571,11 @@ export function drawPlayer(g: Graphics, glow: Graphics, w: World, m?: Motion): v
   if (slot) drawWeaponShape(g, slot.id, sx + ax * 22, sy + ay * 22, p.facing, 1);
   // ember glow at the claws
   glow.circle(sx + ax * 22, sy + ay * 22, 5).fill({ color: PAL.ember, alpha: 0.35 });
+  // slowed: heavy tears run down the shroud
+  if ((p.slow ?? 0) > 0) {
+    for (let i = 0; i < 3; i++) {
+      const k = (w.time * 1.4 + i / 3) % 1;
+      glow.poly([x - 14 + i * 14, top + 30 + k * 50, x - 11 + i * 14, top + 38 + k * 50, x - 14 + i * 14, top + 42 + k * 50, x - 17 + i * 14, top + 38 + k * 50]).fill({ color: 0x8ab4ff, alpha: 0.8 * (1 - k) });
+    }
+  }
 }

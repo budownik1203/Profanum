@@ -1,29 +1,23 @@
 /**
- * The bosses: one per floor and the Holy Flame at the end (design doc: Bossowie).
+ * The bosses: three a floor and the Holy Flame at the end (design doc: Bossowie).
  * Every boss fights for the light: it relights its arena, it is stronger in light (faster attacks,
  * shrugs off hits) and weaker in the dark (see bossTakenMul in combat.ts).
  *
- * A script is a small state machine over `boss.step`: "idle" (moving, waiting for the next attack),
- * one step per attack, and "phase" (a roar when the boss crosses a health threshold).
+ * This file has the machinery, the first boss of every floor and the Flame; the other ten live in
+ * bosses2.ts. The tools the scripts are written with are in bosskit.ts.
  */
 import { CONFIG } from "./config.js";
-import { type Vec, add, angleOf, dist, fromAngle, len, norm, scale, sub, vec } from "./math.js";
+import { add, angleOf, dist, fromAngle, scale, vec } from "./math.js";
 import type { UnitKind } from "./data/units.js";
-import type { Bullet, BossState, Light, Side, Unit } from "./types.js";
+import type { BossState, Unit } from "./types.js";
 import type { World } from "./world.js";
-import { addZone, bossLit, damageUnit, fan, hurtPlayer, lob, ring, spawnBullet } from "./combat.js";
+import { addZone, bossLit, fan, lob, ring } from "./combat.js";
 import { relight, relightable } from "./lighting.js";
-
-interface Ctx {
-  w: World;
-  u: Unit;
-  b: BossState;
-  dt: number;
-  /** Attack speed: faster in light, slower in the dark, faster each phase. */
-  haste: number;
-  /** Where the necromancer is (or the nearest minion if he is gone). */
-  target: Vec;
-}
+import {
+  type Ctx, B, adds, aim, blink, cd, choose, cone, contact, crowd, idle, keepDistance, moveTo, placeLight, relightNear, rest, shot, start, summon,
+  telegraph, tickCooldowns,
+} from "./bosskit.js";
+import { ARENAS2, PHASES2, SCRIPTS2, onPhase2 } from "./bosses2.js";
 
 /** Health shares at which a boss enters its next phase. */
 const PHASES: Partial<Record<UnitKind, number[]>> = {
@@ -33,20 +27,16 @@ const PHASES: Partial<Record<UnitKind, number[]>> = {
   bishop: [0.55],
   grandinquisitor: [0.5],
   holyflame: [0.6, 0.25],
+  ...PHASES2,
 };
 
 // ------------------------------------------------------------------ arenas
-function wallSide(w: World, x: number, y: number): Side {
-  const d: [Side, number][] = [["N", y], ["S", w.room.h - y], ["W", x], ["E", w.room.w - x]];
-  return d.sort((a, b) => a[1] - b[1])[0][0];
-}
-
 export function setupBossArena(w: World, kind: UnitKind, depth: number, _rng: () => number): Unit {
   const W = w.room.w;
   const H = w.room.h;
   w.dark = true;
   w.alarm = true;
-  const light = (k: Parameters<World["addLight"]>[0], x: number, y: number): Light => w.addLight(k, vec(x, y), k === "torch" || k === "window" ? { wall: wallSide(w, x, y) } : {});
+  const light = (k: Parameters<World["addLight"]>[0], x: number, y: number) => placeLight(w, k, x, y);
   let at = vec(W / 2, H * 0.43);
   switch (kind) {
     case "executioner":
@@ -124,6 +114,7 @@ export function setupBossArena(w: World, kind: UnitKind, depth: number, _rng: ()
       break;
     }
     default:
+      at = ARENAS2[kind]?.(w) ?? at;
       break;
   }
   const boss = w.spawn(kind, at, "enemy");
@@ -187,140 +178,6 @@ function think(w: World, u: Unit, b: BossState, dt: number): void {
   SCRIPTS[u.kind]?.(c);
 }
 
-function start(c: Ctx, step: string): void {
-  c.b.step = step;
-  c.b.t = 0;
-  c.b.n = 0;
-  c.u.state = "boss";
-  if (step !== "idle" && step !== "phase") c.b.prev = step;
-}
-
-function idle(b: BossState, seconds: number): void {
-  b.step = "idle";
-  b.t = 0;
-  b.n = 0;
-  b.next = seconds;
-}
-
-function rest(c: Ctx, seconds: number): void {
-  idle(c.b, seconds / c.haste);
-  c.u.state = "boss";
-}
-
-/** Weighted choice that avoids repeating the last attack when it can. */
-function choose(c: Ctx, options: [string, number][]): string {
-  const pool = options.length > 1 ? options.filter(([n]) => n !== c.b.prev) : options;
-  const total = pool.reduce((s, [, wgt]) => s + wgt, 0);
-  let r = c.w.rng() * total;
-  for (const [n, wgt] of pool) {
-    r -= wgt;
-    if (r <= 0) return n;
-  }
-  return pool[0][0];
-}
-
-const cd = (c: Ctx, key: string): number => c.b.mem[key] ?? 0;
-function tickCooldowns(c: Ctx): void {
-  for (const k of Object.keys(c.b.mem)) if (k.endsWith("Cd")) c.b.mem[k] -= c.dt;
-}
-
-function moveTo(c: Ctx, goal: Vec, speed: number): void {
-  const d = sub(goal, c.u.pos);
-  if (len(d) < 8) {
-    c.w.moveUnit(c.u, vec(), c.dt);
-    return;
-  }
-  c.u.dir = norm(d);
-  c.w.moveUnit(c.u, scale(c.u.dir, speed), c.dt);
-}
-
-/** Hold a distance from the target and circle it. */
-function keepDistance(c: Ctx, want: number, speed: number): void {
-  const toT = sub(c.target, c.u.pos);
-  const d = len(toT);
-  const dirT = norm(toT);
-  c.u.dir = dirT;
-  const radial = d > want + 60 ? 1 : d < want - 60 ? -1 : 0;
-  if (c.w.rng() < c.dt * 0.25) c.u.strafe *= -1;
-  const side = { x: -dirT.y * c.u.strafe, y: dirT.x * c.u.strafe };
-  c.w.moveUnit(c.u, scale(norm(add(scale(dirT, radial), scale(side, 0.6))), speed), c.dt);
-}
-
-const B = (c: Ctx, o: Partial<Bullet> = {}): Partial<Bullet> & Pick<Bullet, "side"> => ({ side: c.u.team, radius: 10, damage: 4, halves: 1, life: 7, look: "ember", ...o });
-
-function shot(c: Ctx, from: Vec, dir: Vec, speed: number, o: Partial<Bullet> = {}): void {
-  spawnBullet(c.w, { ...B(c, o), pos: { ...from }, vel: scale(dir, speed) });
-}
-
-function aim(c: Ctx): Vec {
-  return norm(sub(c.target, c.u.pos));
-}
-
-/** A blow in a cone in front of the boss. */
-function cone(c: Ctx, dir: Vec, range: number, half: number, unitDamage: number): void {
-  const { w, u } = c;
-  const inside = (p: Vec) => {
-    const d = sub(p, u.pos);
-    if (len(d) > range) return false;
-    let a = angleOf(d) - angleOf(dir);
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a < -Math.PI) a += Math.PI * 2;
-    return Math.abs(a) <= half;
-  };
-  if (w.player.alive && inside(w.player.pos)) hurtPlayer(w, 1, dir);
-  for (const o of w.units) if (o.alive && o.team !== u.team && inside(o.pos)) damageUnit(w, o, unitDamage, dir, { side: u.team, knock: 90 });
-}
-
-/** Running into the boss hurts. */
-function contact(c: Ctx, dir: Vec, unitDamage: number): void {
-  const { w, u } = c;
-  if (w.player.alive && dist(w.player.pos, u.pos) < u.radius + CONFIG.player.radius) hurtPlayer(w, 1, dir);
-  for (const o of w.units) if (o.alive && o.team !== u.team && dist(o.pos, u.pos) < u.radius + o.radius) damageUnit(w, o, unitDamage, dir, { side: u.team, knock: 90 });
-}
-
-function adds(c: Ctx): number {
-  return c.w.units.filter((x) => x.alive && x.team === c.u.team && !x.def.boss).length;
-}
-
-function summon(c: Ctx, kind: UnitKind, at: Vec): void {
-  const s = c.w.spawn(kind, c.w.collideWorld(at, 30), c.u.team);
-  c.w.events.push({ type: "raise", pos: { ...s.pos }, kind, unit: s.id, free: true });
-}
-
-/** Relight up to `n` lights of these kinds within `range`; returns how many. */
-function relightNear(c: Ctx, kinds: Light["kind"][], range: number, n: number): number {
-  const list = c.w.lights.filter((l) => kinds.includes(l.kind) && relightable(l) && dist(l.pos, c.u.pos) < range).sort((a, b) => dist(a.pos, c.u.pos) - dist(b.pos, c.u.pos));
-  for (const l of list.slice(0, n)) relight(c.w, l, c.u.id);
-  return Math.min(n, list.length);
-}
-
-function telegraph(c: Ctx): void {
-  c.w.events.push({ type: "telegraph", enemy: c.u.id });
-}
-
-function randomSpot(c: Ctx, awayFrom: Vec, minDist: number): Vec {
-  const { w } = c;
-  for (let i = 0; i < 20; i++) {
-    const p = vec(200 + w.rng() * (w.room.w - 400), 200 + w.rng() * (w.room.h - 400));
-    if (dist(p, awayFrom) >= minDist) return p;
-  }
-  return vec(w.room.w / 2, w.room.h / 2);
-}
-
-/** Reinforcements walk in from the edges of the arena: bodies for the necromancer to raise. */
-function crowd(c: Ctx, kinds: UnitKind[], cooldown: number): void {
-  const { w, u, b, dt } = c;
-  w.moveUnit(u, vec(), dt);
-  if (b.n === 0 && b.t >= 0.8) {
-    b.n = 1;
-    const spots = [vec(110, w.room.h * 0.3), vec(w.room.w - 110, w.room.h * 0.3), vec(110, w.room.h * 0.7), vec(w.room.w - 110, w.room.h * 0.7)];
-    const r = Math.floor(w.rng() * 4);
-    kinds.forEach((k, i) => summon(c, k, spots[(i + r) % 4]));
-    b.mem.crowdCd = cooldown;
-  }
-  if (b.t >= 1.3) rest(c, 1);
-}
-
 function onPhase(c: Ctx): void {
   const { w, u } = c;
   switch (u.kind) {
@@ -346,11 +203,15 @@ function onPhase(c: Ctx): void {
       summon(c, "dog", vec(90, w.room.h / 2 - 120));
       summon(c, "dog", vec(w.room.w - 90, w.room.h / 2 + 120));
       break;
-    default:
+    case "executioner":
+    case "powdermaster":
+    case "grandinquisitor":
       w.events.push({ type: "explosion", pos: { ...u.pos }, radius: 90 });
+      break;
+    default:
+      if (!onPhase2(c)) w.events.push({ type: "explosion", pos: { ...u.pos }, radius: 90 });
   }
 }
-
 // ------------------------------------------------------------------ the City Executioner
 function executioner(c: Ctx): void {
   const { w, u, b, dt } = c;
@@ -659,9 +520,7 @@ function powdermaster(c: Ctx): void {
     case "blink":
       if (b.n === 0) {
         b.n = 1;
-        w.events.push({ type: "dodge", pos: { ...u.pos }, dir: vec(0, -1) });
-        u.pos = w.collideWorld(randomSpot(c, w.player.pos, 520), u.radius);
-        w.events.push({ type: "dodge", pos: { ...u.pos }, dir: vec(0, 1) });
+        blink(c, 520);
       }
       if (b.t > 0.5) rest(c, 0.8);
       break;
@@ -1025,4 +884,5 @@ const SCRIPTS: Partial<Record<UnitKind, (c: Ctx) => void>> = {
   bishop,
   grandinquisitor,
   holyflame,
+  ...SCRIPTS2,
 };

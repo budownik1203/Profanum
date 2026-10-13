@@ -605,6 +605,10 @@ export class GameAudio {
         case "doorsShut":
           this.clank(0, 0.9);
           break;
+        case "trap":
+          this.clank(at(e.pos)[0], 0.8);
+          this.click(0.5, 1800);
+          break;
         case "bell":
           if (e.done) this.bell(at(e.pos)[0], 0.7, midi(57));
           else if (this.allow("ring", 0.4)) this.chime(at(e.pos)[0], 0.25, [93], 0);

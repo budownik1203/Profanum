@@ -6,6 +6,7 @@
 import { CONFIG } from "./config.js";
 import { makeRng, type Vec, vec } from "./math.js";
 import { FLOORS, floorDef } from "./data/floors.js";
+import type { UnitKind } from "./data/units.js";
 import { WEAPONS } from "./data/weapons.js";
 import {
   TEMPLATES, type RoomType, applyAltar, applySecret, applyShop, applyStart, applyTemplate, applyTreasure, roomSize, templateByName,
@@ -44,6 +45,8 @@ export interface FloorOptions {
   pool?: string[];
   grace?: boolean;
   roomCount?: number;
+  /** Who waits in the boss room (otherwise drawn from the floor's three). */
+  boss?: UnitKind;
 }
 
 const DIRS: Record<Side, [number, number]> = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] };
@@ -59,6 +62,8 @@ export class Floor {
   readonly depth: number;
   /** The saint's finger showed the whole floor. */
   revealed = false;
+  /** The boss of this floor, drawn from its pool of three. */
+  readonly boss: UnitKind;
   private rng: () => number;
   private opts: FloorOptions;
 
@@ -67,6 +72,9 @@ export class Floor {
     this.opts = { depth: 1, ...options };
     this.depth = this.opts.depth;
     this.rng = makeRng(seed);
+    // a separate draw, so the choice of boss doesn't change the layout of the floor
+    const pool = this.depth >= 6 ? ["holyflame" as UnitKind] : floorDef(this.depth).bosses;
+    this.boss = this.opts.boss ?? pool[Math.floor(makeRng(seed * 31 + 7)() * pool.length)];
     if (this.depth >= 6) this.generateSanctum();
     else this.generate(this.opts.roomCount ?? floorDef(this.depth).rooms);
     const start = this.rooms[0];
@@ -250,10 +258,8 @@ export class Floor {
         applySecret(w, this.depth, (this.depth - 1) * 2 + Math.floor(rng() * 2));
         break;
       case "boss":
-        setupBossArena(w, def.boss, this.depth, rng);
-        break;
       case "final":
-        setupBossArena(w, "holyflame", 6, rng);
+        setupBossArena(w, this.boss, this.depth, rng);
         break;
       default: {
         const t = template!;

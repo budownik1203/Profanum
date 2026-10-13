@@ -79,6 +79,7 @@ export const CONFIG = {
     chandelier: { radius: 330, hp: 2, hit: 34, lift: 150 },
     brazier: { radius: 260, hp: 2, hit: 26, lift: 22 },
     pyre: { radius: 300, hp: 3, hit: 34, lift: 40 }, // the Church's stake: holy fire
+    streetlamp: { radius: 250, hp: 1, hit: 22, lift: 74 }, // a lantern on an iron post
     window: { radius: 220, hp: 0, hit: 0, lift: 0 }, // can't be put out, only broken
     lantern: { radius: 150, hp: 0, hit: 0, lift: 0 },
     censer: { radius: 170, hp: 0, hit: 0, lift: 0 }, // incense smoke that drives the dark away

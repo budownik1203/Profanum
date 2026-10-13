@@ -12,7 +12,8 @@ export interface FloorDef {
   depth: number;
   /** Rooms on the floor (without the secret one). */
   rooms: number;
-  boss: UnitKind;
+  /** The floor draws its boss from these three (design doc: Bossowie). */
+  bosses: UnitKind[];
   /** Who fills the guard spots of a room template, by role. Repeats weigh the draw. */
   melee: UnitKind[];
   ranged: UnitKind[];
@@ -34,7 +35,7 @@ export interface FloorDef {
 
 export const FLOORS: FloorDef[] = [
   {
-    id: "cmentarz", depth: 1, rooms: 10, boss: "executioner",
+    id: "cmentarz", depth: 1, rooms: 10, bosses: ["executioner", "exorcist", "mourner"],
     melee: ["peasant", "peasant", "feral", "feral", "torchbearer", "gravedigger"],
     ranged: ["witchhunter", "witchhunter", "peasant"],
     special: ["torchbearer", "gravedigger", "feral"],
@@ -44,7 +45,7 @@ export const FLOORS: FloorDef[] = [
     barrels: 0.1, bells: false, extra: 0,
   },
   {
-    id: "slumsy", depth: 2, rooms: 11, boss: "captain",
+    id: "slumsy", depth: 2, rooms: 11, bosses: ["captain", "ratcatcher", "mobleader"],
     melee: ["peasant", "halberdier", "halberdier", "torchbearer", "dog"],
     ranged: ["arquebusier", "arquebusier", "witchhunter", "sergeant"],
     special: ["dog", "sergeant", "torchbearer"],
@@ -54,7 +55,7 @@ export const FLOORS: FloorDef[] = [
     barrels: 0.35, bells: false, extra: 1,
   },
   {
-    id: "kupiecka", depth: 3, rooms: 11, boss: "powdermaster",
+    id: "kupiecka", depth: 3, rooms: 11, bosses: ["powdermaster", "usurer", "lampmaster"],
     melee: ["halberdier", "halberdier", "feral", "dog"],
     ranged: ["arquebusier", "cultist", "alchemist", "sergeant"],
     special: ["alchemist", "cultist", "dog"],
@@ -64,7 +65,7 @@ export const FLOORS: FloorDef[] = [
     barrels: 0.6, bells: false, extra: 1,
   },
   {
-    id: "klasztor", depth: 4, rooms: 12, boss: "bishop",
+    id: "klasztor", depth: 4, rooms: 12, bosses: ["bishop", "abbot", "scriptor"],
     melee: ["flagellant", "flagellant", "acolyte"],
     ranged: ["monk", "monk", "acolyte"],
     special: ["bellringer", "monk", "flagellant"],
@@ -74,7 +75,7 @@ export const FLOORS: FloorDef[] = [
     barrels: 0.05, bells: true, extra: 2,
   },
   {
-    id: "katedra", depth: 5, rooms: 12, boss: "grandinquisitor",
+    id: "katedra", depth: 5, rooms: 12, bosses: ["grandinquisitor", "organist", "glassangel"],
     melee: ["knight", "flagellant", "knight"],
     ranged: ["inquisitor", "inquisitor", "monk"],
     special: ["bellringer", "inquisitor", "knight"],

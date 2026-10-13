@@ -4,6 +4,7 @@
  * memory and the browser uses localStorage (which may refuse: then it simply isn't kept).
  */
 import { CHARACTERS, STARTING_POOL, UNLOCKABLES, type Challenge, type CharacterId } from "./data/items.js";
+import { FLOORS } from "./data/floors.js";
 import type { SavedRun, Run } from "./run.js";
 
 export interface Settings {
@@ -112,6 +113,8 @@ export function loadMeta(store: Store): Meta {
       settings: { ...fresh.settings, ...(m.settings ?? {}) },
       characters: m.characters?.length ? m.characters : fresh.characters,
       skullHeard: Array.isArray(m.skullHeard) ? m.skullHeard : [],
+      // the challenges were once named after single bosses
+      challenges: (m.challenges ?? []).map((c) => ((c as string) === "killCaptain" ? "beatSlums" : (c as string) === "killInquisitor" ? "beatCathedral" : c)),
     };
   } catch {
     return fresh;
@@ -163,10 +166,10 @@ export function finishRun(m: Meta, run: Run): Challenge[] {
 export function checkChallenges(m: Meta): Challenge[] {
   const met: Record<Challenge, boolean> = {
     raise20: m.stats.raised >= 20,
-    killCaptain: m.stats.bosses.includes("captain"),
+    beatSlums: FLOORS[1].bosses.some((b) => m.stats.bosses.includes(b)),
     kills250: m.stats.kills >= 250,
     reachMonastery: m.stats.deepest >= 4,
-    killInquisitor: m.stats.bosses.includes("grandinquisitor"),
+    beatCathedral: FLOORS[4].bosses.some((b) => m.stats.bosses.includes(b)),
   };
   const fresh: Challenge[] = [];
   for (const [c, ok] of Object.entries(met) as [Challenge, boolean][]) {
