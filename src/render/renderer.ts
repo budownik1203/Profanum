@@ -3,7 +3,7 @@
  * glow, HUD), effects driven by the simulation's events, and world-space texts.
  * Blood and corpses are baked into a RenderTexture so the arena slowly turns into a slaughterhouse.
  */
-import { Container, Graphics, RenderTexture, Sprite, Texture, type Renderer } from "pixi.js";
+import { ColorMatrixFilter, Container, Graphics, NoiseFilter, RenderTexture, Sprite, Texture, type Renderer } from "pixi.js";
 import { CONFIG } from "../game/config.js";
 import type { Vec } from "../game/math.js";
 import type { Bullet, Corpse, GameEvent, Soul } from "../game/types.js";
@@ -11,7 +11,7 @@ import { World } from "../game/world.js";
 import { t } from "../i18n.js";
 import { PAL } from "../palette.js";
 import { CANDELABRA_ARMS, CHANDELIER_CANDLES, drawChest, drawCover, drawDoorsState, drawFixture, drawFloor, drawInteractable, drawPickup, drawZone } from "./env.js";
-import { drawPlayer, drawUnit } from "./figures.js";
+import { drawPlayer, drawUnit, type Motion } from "./figures.js";
 import { VIEW_H, VIEW_W } from "./hud.js";
 import { TextPool } from "./text.js";
 
@@ -46,6 +46,9 @@ export interface Prompt {
 
 export class GameRenderer {
   readonly root = new Container(); // screen space, scaled to fit the window
+  /** The world as seen through the film: the arena, its darkness and what glows (not the HUD). */
+  private scene = new Container();
+  private grain: NoiseFilter | null = null;
   readonly ui = new Container(); // menus, above everything
   readonly hudLayer = new Container();
   readonly hudG = new Graphics();
@@ -80,6 +83,9 @@ export class GameRenderer {
   private viewScale = 1;
   private viewOffset: Vec = { x: 0, y: 0 };
   private telegraphs = new Map<number, number>(); // enemy id -> seconds of red warning
+  /** Walking: where each figure was last frame and where it is in its step (id -1: the necromancer). */
+  private motion = new Map<number, Motion & { x: number; y: number }>();
+  private frameDt = 0;
   private rope: { from: Vec; to: Vec; life: number } | null = null;
   private flashWhite = 0;
   /** Player options. */
@@ -107,7 +113,22 @@ export class GameRenderer {
 
     this.hudLayer.addChild(this.hudG);
     this.hudText = new TextPool(this.hudLayer);
-    this.root.addChild(this.camLayer, this.darkSprite, this.glowLayer, this.vignette, this.hudLayer, this.ui);
+    this.scene.addChild(this.camLayer, this.darkSprite, this.glowLayer);
+    this.root.addChild(this.scene, this.vignette, this.hudLayer, this.ui);
+  }
+
+  /** Darkest-Dungeon film: a little less colour, a little more contrast, and grain (design doc: Postprocess). */
+  setFilm(on: boolean): void {
+    if (!on) {
+      this.scene.filters = null;
+      this.grain = null;
+      return;
+    }
+    const grade = new ColorMatrixFilter();
+    grade.saturate(-0.28, false);
+    grade.contrast(0.1, true);
+    this.grain = new NoiseFilter({ noise: 0.06, seed: Math.random() });
+    this.scene.filters = [grade, this.grain];
   }
 
   /** Forget every room (a new run). */
@@ -133,6 +154,7 @@ export class GameRenderer {
     this.floorFor = null;
     this.particles = [];
     this.floaters = [];
+    this.motion.clear();
     this.cam = { ...world.player.pos };
   }
 
@@ -411,6 +433,8 @@ export class GameRenderer {
 
   // ---------------------------------------------------------------- per frame
   drawWorld(world: World, dt: number, aim: Vec, prompt: Prompt | null): void {
+    if (this.grain) this.grain.seed = Math.random(); // the grain crawls
+    this.frameDt = dt;
     this.updateParticles(dt);
     for (const [id, tt] of this.telegraphs) {
       if (tt - dt <= 0) this.telegraphs.delete(id);
@@ -499,8 +523,18 @@ export class GameRenderer {
     const g = this.actorsG;
     g.clear();
     // draw back to front by y so overlaps read correctly in 3/4 view
-    const actors: { y: number; draw: () => void }[] = world.units.map((u) => ({ y: u.pos.y, draw: () => drawUnit(g, this.glowG, u, world, this.telegraphs.get(u.id) ?? 0) }));
-    if (world.player.alive) actors.push({ y: world.player.pos.y, draw: () => drawPlayer(g, this.glowG, world) });
+    const actors: { y: number; draw: () => void }[] = world.units.map((u) => {
+      const m = this.step(u.id, u.pos, (u.def.size ?? 1) * 14);
+      return { y: u.pos.y, draw: () => drawUnit(g, this.glowG, u, world, this.telegraphs.get(u.id) ?? 0, m) };
+    });
+    if (world.player.alive) {
+      const m = this.step(-1, world.player.pos, 16);
+      actors.push({ y: world.player.pos.y, draw: () => drawPlayer(g, this.glowG, world, m) });
+    }
+    if (this.motion.size > world.units.length + 40) {
+      const alive = new Set(world.units.map((u) => u.id));
+      for (const id of this.motion.keys()) if (id !== -1 && !alive.has(id)) this.motion.delete(id);
+    }
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
     if (this.rope) {
@@ -508,6 +542,27 @@ export class GameRenderer {
       g.moveTo(this.rope.from.x, this.rope.from.y - 40).lineTo(this.rope.to.x, this.rope.to.y - 30).stroke({ width: 4, color: 0x8a6a3a, alpha: Math.max(0, this.rope.life * 4) });
       if (this.rope.life <= 0) this.rope = null;
     }
+  }
+
+  /** Advance a figure's walk cycle from how far it moved since the last frame. */
+  private step(id: number, pos: Vec, strideLen: number): Motion {
+    let m = this.motion.get(id);
+    if (!m) {
+      m = { x: pos.x, y: pos.y, phase: 0, moving: 0, vx: 0 };
+      this.motion.set(id, m);
+    }
+    const dt = this.frameDt;
+    if (dt > 0) {
+      const dx = pos.x - m.x;
+      const d = Math.hypot(dx, pos.y - m.y);
+      const speed = d / dt;
+      if (d < 200) m.phase += d / strideLen; // a jump (a door, a blink) is not a step
+      m.moving += ((speed > 25 && speed < 2000 ? 1 : 0) - m.moving) * Math.min(1, dt * 10);
+      m.vx += ((d < 200 ? dx / dt : 0) - m.vx) * Math.min(1, dt * 8);
+    }
+    m.x = pos.x;
+    m.y = pos.y;
+    return m;
   }
 
   /** The hanging chandelier: drawn above the actors, falling once its chain snaps. */

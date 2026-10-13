@@ -14,6 +14,8 @@ export interface Settings {
   numbers: boolean;
   /** Mode of Grace: more hearts, slower enemy bullets. */
   grace: boolean;
+  /** Film grain and colour grading over the arena. */
+  film: boolean;
   lang: "pl" | "en";
 }
 
@@ -91,7 +93,7 @@ export function freshMeta(): Meta {
     selected: "grabarz",
     challenges: [],
     stats: { runs: 0, wins: 0, deaths: 0, kills: 0, raised: 0, deepest: 0, bosses: [] },
-    settings: { shake: 1, volume: 0.8, music: 0.6, numbers: true, grace: false, lang: "pl" },
+    settings: { shake: 1, volume: 0.8, music: 0.6, numbers: true, grace: false, film: true, lang: "pl" },
     skull: 0,
     skullHeard: [],
   };

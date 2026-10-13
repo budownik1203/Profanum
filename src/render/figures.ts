@@ -54,8 +54,25 @@ const LOOKS: Partial<Record<UnitKind, Look>> = {
 
 const MINION = { coat: PAL.minion, coatMid: PAL.minionMid, skin: 0x7a766e };
 
+/** How a figure is moving, tracked by the renderer: the step cycle, how much it walks (0..1), sideways speed. */
+export interface Motion {
+  phase: number;
+  moving: number;
+  vx: number;
+}
+
+/** Feet stepping out from under a coat or a robe. */
+function feet(g: Graphics, x: number, y: number, s: number, m: Motion | undefined, color: number): void {
+  if (!m || m.moving < 0.05) return;
+  const dir = m.vx >= 0 ? 1 : -1;
+  const stride = Math.sin(m.phase) * 6 * s * m.moving * dir;
+  for (const [side, k] of [[-1, 1], [1, -1]] as const) {
+    g.ellipse(x + side * 7 * s + stride * k, y + 13 * s - Math.max(0, Math.cos(m.phase) * k) * 2 * s, 7 * s, 4 * s).fill(color).stroke({ width: 2, color: PAL.ink });
+  }
+}
+
 // ------------------------------------------------------------------ units
-export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: number): void {
+export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: number, m?: Motion): void {
   if (e.kind === "dog") return drawDog(g, glow, e, w, warn);
   if (e.kind === "mimic") return drawMimic(g, glow, e, w);
   if (e.kind === "abomination") return drawAbomination(g, glow, e, w);
@@ -70,11 +87,16 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   const coatMid = flash ? 0xffffff : minion ? MINION.coatMid : look.coatMid;
   const skin = flash ? 0xffffff : minion ? MINION.skin : look.skin;
   const s = size;
-  const top = y - 70 * s;
-  const hunch = (look.hunch ?? 0) * 20 * s * face;
+  // walking: the body bobs with each step and leans into the way it goes
+  const mv = m?.moving ?? 0;
+  const bob = m ? mv * Math.abs(Math.sin(m.phase)) * 3 * s : 0;
+  const lean = m ? Math.max(-1, Math.min(1, m.vx / 250)) * 5 * s * mv : 0;
+  const top = y - 70 * s - bob;
+  const hunch = (look.hunch ?? 0) * 20 * s * face + lean;
   const bulk = look.bulk ?? 1;
 
   g.ellipse(x, y + 16 * s, 24 * s * bulk, 8 * s).fill({ color: PAL.ink, alpha: 0.6 });
+  feet(g, x, y, s, m, flash ? 0xffffff : minion ? MINION.coatMid : 0x1a1412);
   if (minion) {
     // black mist curling at the feet; it thins out as the body nears its end
     const left = Math.min(1, e.lifetime / 6);
@@ -458,7 +480,7 @@ const HEROES: Record<CharacterId, Hero> = {
   wiedzma: { body: 0x2e3a28, shade: 0x161e12, hood: "hair", eyes: 0xff4a4a },
 };
 
-export function drawPlayer(g: Graphics, glow: Graphics, w: World): void {
+export function drawPlayer(g: Graphics, glow: Graphics, w: World, m?: Motion): void {
   const p = w.player;
   const hero = HEROES[p.character] ?? HEROES.grabarz;
   const { x, y } = p.pos;
@@ -472,7 +494,9 @@ export function drawPlayer(g: Graphics, glow: Graphics, w: World): void {
   }
   if (p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) return; // hit blink
 
-  const top = y - 78; // ~96 px tall sprite
+  feet(g, x, y + 2, 1, m, 0x14110f);
+  const bob = m ? m.moving * Math.abs(Math.sin(m.phase)) * 3 : 0;
+  const top = y - 78 - bob; // ~96 px tall sprite
   const body = [
     x - 8 * face, top, x + 14 * face, top + 6, x + 20 * face, top + 26, x + 18 * face, top + 40,
     x + 30 * face, top + 54, x + 26 * face, top + 70, x + 24 * face, top + 92,

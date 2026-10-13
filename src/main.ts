@@ -23,6 +23,7 @@ import { Narrator, lineOf, nextSkullLine } from "./narrator.js";
 import { noteText } from "./notes.js";
 import { PAL } from "./palette.js";
 import { drawHud } from "./render/hud.js";
+import { GameAudio, type MusicState } from "./audio.js";
 import { drawItemIcon, drawRelicIcon } from "./render/icons.js";
 import { GameRenderer, type Prompt } from "./render/renderer.js";
 import { Screens, type InvRow, type InvSection, type MenuView } from "./render/screens.js";
@@ -52,10 +53,15 @@ async function boot(): Promise<void> {
   const store = makeStore();
   const meta: Meta = loadMeta(store);
   setLang(meta.settings.lang);
+  const audio = new GameAudio();
+  // browsers allow sound only after the player touches something
+  for (const ev of ["pointerdown", "keydown"] as const) window.addEventListener(ev, () => audio.unlock(), { capture: true });
   const applySettings = () => {
     view.shakeScale = meta.settings.shake;
     view.showNumbers = meta.settings.numbers;
     setLang(meta.settings.lang);
+    audio.setVolumes(meta.settings.volume, meta.settings.music);
+    view.setFilm(meta.settings.film);
   };
   applySettings();
   const persist = () => saveMeta(store, meta);
@@ -195,6 +201,7 @@ async function boot(): Promise<void> {
       { label: t("opt.volume", { v: `${Math.round(s.volume * 100)}%` }) },
       { label: t("opt.music", { v: `${Math.round(s.music * 100)}%` }) },
       { label: t("opt.numbers", { v: onOff(s.numbers) }) },
+      { label: t("opt.film", { v: onOff(s.film) }) },
       { label: t("opt.grace", { v: onOff(s.grace) }) },
       { label: t("opt.lang") },
       { label: t("opt.back") },
@@ -210,8 +217,9 @@ async function boot(): Promise<void> {
       case 1: s.volume = cycle(s.volume, [1, 0.8, 0.5, 0.25, 0]); break;
       case 2: s.music = cycle(s.music, [1, 0.6, 0.3, 0]); break;
       case 3: s.numbers = !s.numbers; break;
-      case 4: s.grace = !s.grace; break;
-      case 5: s.lang = s.lang === "pl" ? "en" : "pl"; break;
+      case 4: s.film = !s.film; break;
+      case 5: s.grace = !s.grace; break;
+      case 6: s.lang = s.lang === "pl" ? "en" : "pl"; break;
       default:
         overlay = overlayBack;
         sel = 0;
@@ -382,6 +390,7 @@ async function boot(): Promise<void> {
   // ---------------------------------------------------------------- simulation events → presentation
   const react = (events: GameEvent[], w: World) => {
     view.handle(events, w);
+    audio.hear(events, w);
     narrator.hear(events, w.player.halves);
     for (const e of events) {
       switch (e.type) {
@@ -429,6 +438,16 @@ async function boot(): Promise<void> {
           break;
       }
     }
+  };
+
+  /** The mood of the music: quiet exploring, a fight, a boss, the crypt, the title. */
+  const musicState = (): MusicState => {
+    if (mode === "title") return "title";
+    if (mode === "hub") return "crypt";
+    if (mode === "summary" || !run || run.over) return "silent";
+    const w = run.world;
+    if (w.units.some((u) => u.def.boss && u.alive)) return "boss";
+    return w.alarm && w.enemies.length > 0 ? "combat" : "explore";
   };
 
   const roomTitle = (r: Run): string => {
@@ -529,6 +548,12 @@ async function boot(): Promise<void> {
     get overlay() {
       return overlay;
     },
+    get audio() {
+      return audio.status;
+    },
+    measureAudio() {
+      return GameAudio.measure();
+    },
     /** Open an overlay directly (screenshots). */
     show(o: string) {
       overlay = o as Overlay;
@@ -547,6 +572,7 @@ async function boot(): Promise<void> {
     const accept = input.wasPressed("Enter") || input.wasPressed("Space") || input.wasPressed("KeyE");
     const esc = input.wasPressed("Escape");
     narrator.update(dt);
+    audio.update(musicState(), overlay !== null);
     if (banner) {
       banner.time -= dt;
       if (banner.time <= 0) banner = null;
@@ -559,11 +585,14 @@ async function boot(): Promise<void> {
 
     // a generic menu handler: keys, hover, click
     const runMenu = (count: number, hovered: number, action: (i: number) => void) => {
+      const before = sel;
       if (up) sel = (sel - 1 + count) % count;
       if (down) sel = (sel + 1) % count;
       if (hovered >= 0) sel = hovered;
+      if (sel !== before) audio.ui("move");
       if (accept || (clicked && hovered >= 0)) {
         input.releaseMouse();
+        audio.ui("accept");
         action(sel);
       }
     };
