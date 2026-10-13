@@ -30,9 +30,9 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 
 | Polecenie | Co robi |
 | --- | --- |
-| `node tools/fullrun.mjs [n] [god\|mortal] [postać]` | Bot przechodzi całe wyprawy: czas, pokoje, utknięcia, bossowie, wydajność kroku |
+| `node tools/fullrun.mjs [n] [god\|mortal] [postać] [secrets]` | Bot przechodzi całe wyprawy: czas, pokoje, utknięcia, bossowie, wydajność kroku |
 | `node tools/balance.mjs [n] [broń] [bossowie]` | Bot walczy z każdym bossem: czas zabicia i utracone serca |
-| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, loot2, crypt, audio) |
+| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, loot2, secret, crypt, audio) |
 
 ## Sterowanie
 
@@ -54,6 +54,9 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 
 - **Wyprawa**: pięć pięter (Cmentarz, Slumsy, Dzielnica kupiecka, Klasztor, Katedra) i Sanktuarium Płomienia.
   Każde piętro ma 10–12 pokoi: walki, skarbiec, Paser, ołtarz, mini-boss, boss i ukryte katakumby za pękniętą ścianą.
+- **Tajne piętra**: w katakumbach pięter 1–4 jest zapadnia na kłódkę. Klucz otwiera zejście do Ossuarium (pod piętrami 1–2)
+  albo Lochów Inkwizycji (pod piętrami 3–4). Tajne piętro jest krótkie, ciemne i dobrze strzeżone, ma skarbiec z relikwiarzem,
+  a schody za jego strażnikiem prowadzą na następne piętro.
   Run zapisuje się na początku każdego piętra.
 - **Walka o światło**: sale są jasne, mrok leży na krańcach. Gasisz światła strzałami, żeby wywalczyć mrok.
   W mroku zasadzka zadaje podwójne obrażenia, a sługi biją mocniej. Święte światło (witraże, stosy) parzy.

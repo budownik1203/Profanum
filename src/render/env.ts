@@ -20,7 +20,7 @@ export interface Theme {
   line: number;
   wall: number;
   wallTop: number;
-  pattern: "flag" | "grass" | "cobble" | "tile" | "marble" | "cracks" | "bone";
+  pattern: "flag" | "grass" | "cobble" | "tile" | "marble" | "cracks" | "bone" | "ossuary" | "dungeon";
   accent: number;
 }
 
@@ -32,6 +32,8 @@ export const THEMES: Record<string, Theme> = {
   katedra: { floor: [0x2e2826, 0x332c29, 0x2a2422, 0x3a322e], line: 0x151010, wall: 0x1c1514, wallTop: 0x5a4a2a, pattern: "marble", accent: 0x9e1f14 },
   sanktuarium: { floor: [0x1e1614, 0x231a17, 0x1a1311, 0x271d19], line: 0x0c0806, wall: 0x140e0c, wallTop: 0x3a221a, pattern: "cracks", accent: 0xff6a1c },
   krypta: { floor: [0x262321, 0x2a2624, 0x221f1d, 0x2e2a27], line: 0x100e0d, wall: 0x181514, wallTop: 0x3c3632, pattern: "bone", accent: 0xcfc4a8 },
+  ossuarium: { floor: [0x2a2620, 0x2f2a23, 0x26221c, 0x332e26], line: 0x110f0c, wall: 0x1a1713, wallTop: 0x4a443a, pattern: "ossuary", accent: 0xcfc4a8 },
+  lochy: { floor: [0x22231f, 0x262722, 0x1f201c, 0x2a2b25], line: 0x0e0f0c, wall: 0x151612, wallTop: 0x34362e, pattern: "dungeon", accent: 0x6a1e18 },
 };
 
 export const themeOf = (w: World): Theme => THEMES[w.theme] ?? THEMES.klasztor;
@@ -118,6 +120,46 @@ export function drawFloor(g: Graphics, w: World, doors: Door[]): void {
       }
       break;
     }
+    case "ossuary": {
+      // packed earth strewn with bones, here and there a skull looking up
+      for (let y = 0; y < H; y += 60) {
+        for (let x = 0; x < W; x += 60) {
+          const r = hash(x, y);
+          g.rect(x, y, 60, 60).fill(th.floor[Math.floor(r * th.floor.length)]);
+          if (r > 0.7) {
+            const a = hash(y, x) * Math.PI;
+            const cx = x + 30;
+            const cy = y + 30;
+            const dx = Math.cos(a) * 12;
+            const dy = Math.sin(a) * 6;
+            g.moveTo(cx - dx, cy - dy).lineTo(cx + dx, cy + dy).stroke({ width: 4, color: 0x8a8270, cap: "round" });
+            g.circle(cx - dx, cy - dy, 3).fill(0x8a8270);
+            g.circle(cx + dx, cy + dy, 3).fill(0x8a8270);
+          } else if (r < 0.06) {
+            g.circle(x + 30, y + 30, 8).fill(0xa89e88).stroke({ width: 2, color: PAL.ink });
+            g.circle(x + 27, y + 29, 2).fill(PAL.ink);
+            g.circle(x + 33, y + 29, 2).fill(PAL.ink);
+          }
+        }
+      }
+      break;
+    }
+    case "dungeon": {
+      // wet flagstones, a gutter down the middle and drain grates
+      const ft = 72;
+      let row = 0;
+      for (let y = 0; y < H; y += ft, row++) {
+        const off = (row % 2) * 54;
+        for (let x = -off; x < W; x += 108) g.rect(x + 3, y + 3, 102, ft - 6).fill(th.floor[Math.floor(hash(x, y) * th.floor.length)]);
+      }
+      g.rect(W / 2 - 14, 0, 28, H).fill({ color: 0x0c0d0a, alpha: 0.7 });
+      for (let y = 200; y < H; y += 420) {
+        g.rect(W / 2 - 34, y, 68, 44).fill(0x0a0a08).stroke({ width: 3, color: PAL.ink });
+        for (let i = 1; i < 5; i++) g.rect(W / 2 - 34 + i * 13.6 - 2, y + 2, 4, 40).fill(0x3a3a34);
+      }
+      for (let i = 0; i < 14; i++) g.ellipse(hash(i, 5) * W, hash(5, i) * H, 30 + hash(i, i) * 40, 10 + hash(i, 2) * 10).fill({ color: 0x3a4a44, alpha: 0.18 });
+      break;
+    }
     default: {
       // staggered flagstones
       const ft = 64;
@@ -142,6 +184,24 @@ export function drawFloor(g: Graphics, w: World, doors: Door[]): void {
     for (let x = 120; x < W - 100; x += 160) {
       g.rect(x - 16, 6, 32, 28).fill(0x0c0a09);
       g.circle(x, 22, 9).fill(0xbdb29a).stroke({ width: 2, color: PAL.ink });
+    }
+  }
+  if (w.theme === "ossuarium") {
+    // the walls are built of skulls, row on row
+    for (let row = 0; row < 3; row++) {
+      for (let x = wall + 14 + (row % 2) * 12; x < W - wall - 10; x += 24) {
+        g.circle(x, 8 + row * 11, 8).fill(row === 1 ? 0xa89e88 : 0xbdb29a).stroke({ width: 1.5, color: PAL.ink });
+        g.circle(x - 3, 7 + row * 11, 1.8).fill(PAL.ink);
+        g.circle(x + 3, 7 + row * 11, 1.8).fill(PAL.ink);
+      }
+    }
+    for (const xx of [6, W - 30]) for (let y = wall + 20; y < H - wall; y += 26) g.circle(xx + 12, y, 7).fill(0xa89e88).stroke({ width: 1.5, color: PAL.ink });
+  }
+  if (w.theme === "lochy") {
+    // chains and shackles hang from the walls
+    for (let x = 160; x < W - 120; x += 260) {
+      for (let i = 0; i < 4; i++) g.ellipse(x + (i % 2) * 2, 10 + i * 9, 3, 5).stroke({ width: 2.5, color: 0x5a5a52 });
+      g.circle(x, 52, 7).stroke({ width: 3, color: 0x5a5a52 });
     }
   }
   g.rect(wall - 4, wall - 4, W - wall * 2 + 8, H - wall * 2 + 8).stroke({ width: 8, color: PAL.ink });
@@ -538,6 +598,25 @@ export function drawInteractable(g: Graphics, glow: Graphics, it: Interactable, 
       g.rect(x - 70, y - 40, 140, 80).fill(0x0a0605).stroke({ width: OUT, color: PAL.ink });
       for (let i = 0; i < 4; i++) g.rect(x - 66 + i * 8, y - 36 + i * 18, 132 - i * 16, 10).fill(0x3a3028 - i * 0x080605).stroke({ width: 2, color: PAL.ink });
       glow.ellipse(x, y + 20, 50, 16).fill({ color: PAL.ember, alpha: 0.12 + 0.06 * Math.sin(t * 2) });
+      break;
+    }
+    case "hatch": {
+      // a trapdoor in the floor: oak planks bound in iron, a padlock until it's opened
+      g.ellipse(x, y + 8, 80, 26).fill({ color: PAL.ink, alpha: 0.6 });
+      if (it.used) {
+        g.rect(x - 60, y - 34, 120, 68).fill(0x050403).stroke({ width: OUT, color: PAL.ink });
+        for (let i = 0; i < 4; i++) g.rect(x - 52 + i * 8, y - 28 + i * 14, 104 - i * 16, 8).fill(0x2a241e - i * 0x060504);
+        break;
+      }
+      g.rect(x - 60, y - 34, 120, 68).fill(0x4a3420).stroke({ width: OUT, color: PAL.ink });
+      for (let i = 1; i < 4; i++) g.moveTo(x - 60 + i * 30, y - 34).lineTo(x - 60 + i * 30, y + 34).stroke({ width: 2, color: 0x2a1c10 });
+      for (const dy of [-20, 18]) g.rect(x - 60, y + dy, 120, 7).fill(0x3a3632).stroke({ width: 2, color: PAL.ink });
+      g.circle(x + 30, y - 2, 9).stroke({ width: 4, color: 0x6a6660 });
+      g.rect(x + 22, y + 2, 16, 14).fill(0x8a7a5a).stroke({ width: 2, color: PAL.ink });
+      g.circle(x + 30, y + 9, 2).fill(PAL.ink);
+      if (highlight) glow.rect(x - 64, y - 38, 128, 76).stroke({ width: 3, color: PAL.ember, alpha: 0.6 });
+      // a cold draught from below
+      glow.ellipse(x, y, 50, 16).fill({ color: 0x8ab4ff, alpha: 0.05 + 0.04 * Math.sin(t * 1.5) });
       break;
     }
     case "altar": {

@@ -5,7 +5,7 @@
 import type { CoverKind, LightKind } from "../types.js";
 import type { UnitKind } from "./units.js";
 
-export type ThemeId = "cmentarz" | "slumsy" | "kupiecka" | "klasztor" | "katedra" | "sanktuarium" | "krypta";
+export type ThemeId = "cmentarz" | "slumsy" | "kupiecka" | "klasztor" | "katedra" | "sanktuarium" | "krypta" | "ossuarium" | "lochy";
 
 export interface FloorDef {
   id: ThemeId;
@@ -87,6 +87,58 @@ export const FLOORS: FloorDef[] = [
 ];
 
 export const SANCTUM = { id: "sanktuarium" as ThemeId, depth: 6, boss: "holyflame" as UnitKind };
+
+// ------------------------------------------------------------------ secret floors
+/**
+ * Secret floors under the catacombs (design doc: Katakumby, like Gungeon's Oubliette). A trapdoor in
+ * the catacombs of the floors above opens with a key; the secret floor is short, dark and well
+ * guarded, holds a reliquary and Echo of Souls, and its guardian's stairs lead to the next floor.
+ */
+export type SecretId = "ossuarium" | "lochy";
+
+export interface SecretFloorDef extends FloorDef {
+  id: SecretId;
+  /** The floors whose catacombs hide the trapdoor down to it. */
+  under: number[];
+  /** Who guards the way out: an elite and his escort. */
+  guardian: UnitKind;
+  escort: UnitKind[];
+  /** Echo of Souls waiting with the guardian. */
+  echo: number;
+}
+
+export const SECRET_FLOORS: Record<SecretId, SecretFloorDef> = {
+  // the ossuary under the cemetery: walls of skulls, the dead who were never buried, their worshippers
+  ossuarium: {
+    id: "ossuarium", depth: 2, rooms: 5, bosses: [],
+    melee: ["feral", "feral", "feral", "gravedigger"],
+    ranged: ["cultist", "cultist", "alchemist"],
+    special: ["alchemist", "cultist", "feral"],
+    elite: ["feral"],
+    flip: "coffin", solid: "tomb",
+    lightMap: { chandelier: "brazier", window: "torch", candelabra: "candle" },
+    barrels: 0.1, bells: false, extra: 1,
+    under: [1, 2], guardian: "abomination", escort: ["feral", "cultist", "feral"], echo: 10,
+  },
+  // the Inquisition's dungeons under the merchants' quarter and the monastery: cells, racks, chains
+  lochy: {
+    id: "lochy", depth: 4, rooms: 5, bosses: [],
+    melee: ["flagellant", "flagellant", "knight", "halberdier"],
+    ranged: ["inquisitor", "arquebusier", "monk"],
+    special: ["monk", "inquisitor", "flagellant"],
+    elite: ["inquisitor", "knight"],
+    flip: "table", solid: "pillar",
+    lightMap: { chandelier: "brazier", window: "torch" },
+    barrels: 0.3, bells: false, extra: 2,
+    under: [3, 4], guardian: "knight", escort: ["inquisitor", "flagellant", "flagellant"], echo: 14,
+  },
+};
+
+/** The secret floor whose trapdoor hides in this floor's catacombs, if any. */
+export function secretUnder(depth: number): SecretId | null {
+  for (const id of Object.keys(SECRET_FLOORS) as SecretId[]) if (SECRET_FLOORS[id].under.includes(depth)) return id;
+  return null;
+}
 
 export function floorDef(depth: number): FloorDef {
   return FLOORS[Math.max(0, Math.min(FLOORS.length - 1, depth - 1))];

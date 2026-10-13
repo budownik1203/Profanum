@@ -658,9 +658,7 @@ export class GameRenderer {
     const h = Math.sin(tt * Math.PI) * l.height;
     g.ellipse(b.pos.x, b.pos.y, 10, 4).fill({ color: PAL.ink, alpha: 0.5 });
     // the landing spot is marked
-    // (a flare only burns where it lands; its light reaches far, but light is not a blow)
-    const markR = l.land === "flare" ? 60 : l.radius;
-    g.circle(l.to.x, l.to.y, markR * (0.4 + 0.6 * tt)).stroke({ width: 2, color: b.side === "minion" ? PAL.ember : PAL.telegraph, alpha: 0.5 });
+    g.circle(l.to.x, l.to.y, l.radius * (0.4 + 0.6 * tt)).stroke({ width: 2, color: b.side === "minion" ? PAL.ember : PAL.telegraph, alpha: 0.5 });
     const x = b.pos.x;
     const y = b.pos.y - h;
     switch (b.look) {

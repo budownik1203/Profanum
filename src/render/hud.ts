@@ -263,6 +263,11 @@ function drawMinimap(g: Graphics, tx: TextPool, floor: Floor): void {
       case "miniboss":
         g.poly([cx - 6, cy + 5, cx - 6, cy - 5, cx - 2, cy, cx, cy - 7, cx + 2, cy, cx + 6, cy - 5, cx + 6, cy + 5]).fill(0xd8b04a);
         break;
+      case "guardian":
+        // crossed bones: the secret floor's guardian
+        g.moveTo(cx - 7, cy - 7).lineTo(cx + 7, cy + 7).stroke({ width: 4, color: 0xcfc4a8 });
+        g.moveTo(cx + 7, cy - 7).lineTo(cx - 7, cy + 7).stroke({ width: 4, color: 0xcfc4a8 });
+        break;
       default:
         break;
     }

@@ -93,6 +93,8 @@ export const CONFIG = {
   chandelier: { fallTime: 0.45, crushRadius: 140, crushDamage: 12 },
   /** Stained glass: holy light that burns the undead. A shot breaks it: glass rains on the guards below. */
   window: { width: 150, shardDamage: 4, brokenRadiusMul: 0.85 },
+  /** The lamp master's flare: the light it throws over the street and for how long. */
+  flare: { light: 560, time: 3.5 },
   /** The newer relics: the penitent's chain, the death knell, the wail from the grave. */
   relics: { chainRange: 380, chainStun: 1.5, knellTime: 8, wailRange: 300 },
   /** Chosen guards carry a taper and relight what the necromancer put out. */

@@ -11,6 +11,8 @@ export const BARRELS: readonly CoverKind[] = ["powder", "oil"];
 
 /** Does this cover stop bullets? (toppled pews, tombs, pillars, crates, barrels) */
 export function blocksBullets(c: Cover): boolean {
+  // the organ's pipes and fretwork let bullets through: it stops bodies, not shots
+  if (c.kind === "organ") return false;
   return !c.broken && (c.flipped || !FLIPPABLE.includes(c.kind));
 }
 

@@ -235,7 +235,7 @@ export const UNITS: Record<UnitKind, UnitDef> = {
   abbot: D({ kind: "abbot", faction: "boss", ai: "boss", hp: 360, radius: 36, speed: 85, melee: 6, gold: [30, 40], raisable: false, size: 1.6, boss: true }),
   scriptor: D({ kind: "scriptor", faction: "boss", ai: "boss", hp: 340, radius: 30, speed: 115, melee: 5, gold: [30, 40], raisable: false, size: 1.5, boss: true }),
   grandinquisitor: D({ kind: "grandinquisitor", faction: "boss", ai: "boss", hp: 380, radius: 36, speed: 140, melee: 6, gold: [35, 45], raisable: false, size: 1.6, boss: true }),
-  organist: D({ kind: "organist", faction: "boss", ai: "boss", hp: 380, radius: 40, speed: 0, melee: 6, gold: [35, 45], raisable: false, size: 1.5, boss: true }),
+  organist: D({ kind: "organist", faction: "boss", ai: "boss", hp: 340, radius: 40, speed: 0, melee: 6, gold: [35, 45], raisable: false, size: 1.5, boss: true }),
   glassangel: D({ kind: "glassangel", faction: "boss", ai: "boss", hp: 400, radius: 44, speed: 95, melee: 6, gold: [35, 45], raisable: false, size: 1.9, boss: true }),
   holyflame: D({ kind: "holyflame", faction: "boss", ai: "boss", hp: 560, radius: 70, speed: 70, melee: 8, gold: [0, 0], raisable: false, size: 2.4, boss: true }),
 };

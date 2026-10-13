@@ -5,11 +5,12 @@
  */
 import { CONFIG } from "./config.js";
 import { makeRng, type Vec, vec } from "./math.js";
-import { FLOORS, floorDef } from "./data/floors.js";
+import { FLOORS, SECRET_FLOORS, floorDef, type SecretFloorDef, type SecretId } from "./data/floors.js";
 import type { UnitKind } from "./data/units.js";
 import { WEAPONS } from "./data/weapons.js";
 import {
-  TEMPLATES, type RoomType, applyAltar, applySecret, applyShop, applyStart, applyTemplate, applyTreasure, roomSize, templateByName,
+  TEMPLATES, type RoomType, applyAltar, applyGuardian, applyLanding, applySecret, applyShop, applyStart, applyTemplate, applyTreasure, applyVault, roomSize,
+  templateByName,
 } from "./rooms.js";
 import { setupBossArena } from "./bosses.js";
 import type { GameEvent, InputState, Player, Side } from "./types.js";
@@ -47,6 +48,10 @@ export interface FloorOptions {
   roomCount?: number;
   /** Who waits in the boss room (otherwise drawn from the floor's three). */
   boss?: UnitKind;
+  /** This is a secret floor under the catacombs (see SECRET_FLOORS). */
+  secret?: SecretId;
+  /** The catacombs of this floor hide the trapdoor down to this secret floor. */
+  hatch?: SecretId | null;
 }
 
 const DIRS: Record<Side, [number, number]> = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] };
@@ -64,6 +69,8 @@ export class Floor {
   revealed = false;
   /** The boss of this floor, drawn from its pool of three. */
   readonly boss: UnitKind;
+  /** A secret floor's definition (null on the ordinary floors). */
+  readonly secret: SecretFloorDef | null;
   private rng: () => number;
   private opts: FloorOptions;
 
@@ -75,7 +82,9 @@ export class Floor {
     // a separate draw, so the choice of boss doesn't change the layout of the floor
     const pool = this.depth >= 6 ? ["holyflame" as UnitKind] : floorDef(this.depth).bosses;
     this.boss = this.opts.boss ?? pool[Math.floor(makeRng(seed * 31 + 7)() * pool.length)];
-    if (this.depth >= 6) this.generateSanctum();
+    this.secret = this.opts.secret ? SECRET_FLOORS[this.opts.secret] : null;
+    if (this.secret) this.generateSecret();
+    else if (this.depth >= 6) this.generateSanctum();
     else this.generate(this.opts.roomCount ?? floorDef(this.depth).rooms);
     const start = this.rooms[0];
     start.world = this.build(start);
@@ -202,6 +211,29 @@ export class Floor {
     s.doors[OPPOSITE[side]] = host.id;
   }
 
+  /**
+   * A secret floor: a short descent of rooms to its guardian, with a vault off to one side.
+   *   start (0,0) - fight (0,-1) - fight (0,-2) - guardian (0,-3); a fight to the side leads to the vault.
+   */
+  private generateSecret(): void {
+    const side = this.rng() < 0.5 ? 1 : -1;
+    const mk = (id: number, gx: number, gy: number, type: RoomType): RoomNode => ({
+      id, gx, gy, type, depth: 0, doors: {}, secretDoors: {}, world: null, visited: false, mirror: this.rng() < 0.5, alarmed: false, hidden: false,
+    });
+    this.rooms.push(mk(0, 0, 0, "start"), mk(1, 0, -1, "combat"), mk(2, side, -1, "combat"), mk(3, side, -2, "treasure"), mk(4, 0, -2, "combat"), mk(5, 0, -3, "guardian"));
+    const link = (a: number, b: number, s: Side) => {
+      this.rooms[a].doors[s] = b;
+      this.rooms[b].doors[OPPOSITE[s]] = a;
+    };
+    link(0, 1, "N");
+    link(1, 2, side > 0 ? "E" : "W");
+    link(2, 3, "N");
+    link(1, 4, "N");
+    link(4, 5, "N");
+    this.computeDepths();
+    for (const r of this.rooms) if (r.type === "combat" || r.type === "guardian") r.layout = pick(this.rng, TEMPLATES).name;
+  }
+
   /** The last floor: an antechamber and the sanctum of the Holy Flame. */
   private generateSanctum(): void {
     const mk = (id: number, gy: number, type: RoomType): RoomNode => ({ id, gx: 0, gy, type, depth: id, doors: {}, secretDoors: {}, world: null, visited: false, mirror: false, alarmed: false, hidden: false });
@@ -237,16 +269,26 @@ export class Floor {
       grace: this.opts.grace ?? false,
       pool: this.opts.pool,
       alarmNeighbours: () => this.alarmNeighbours(node.id),
+      secretEcho: this.secret?.echo,
     };
     if (this.rooms[0].world || this.opts.player) w.player = this.player ?? this.opts.player!;
-    const def = floorDef(this.depth);
+    const sec = this.secret;
+    const def = sec ?? floorDef(this.depth);
     switch (node.type) {
       case "start":
+        if (sec) {
+          applyLanding(w, sec);
+          break;
+        }
         applyStart(w, Math.min(this.depth, FLOORS.length));
         if (this.depth >= 6) w.theme = "sanktuarium";
         break;
       case "treasure":
-        applyTreasure(w, this.depth, rng);
+        if (sec) applyVault(w, sec);
+        else applyTreasure(w, this.depth, rng);
+        break;
+      case "guardian":
+        applyGuardian(w, template!, sec ?? SECRET_FLOORS.ossuarium, rng);
         break;
       case "shop":
         applyShop(w, this.depth);
@@ -255,7 +297,7 @@ export class Floor {
         applyAltar(w, this.depth);
         break;
       case "secret":
-        applySecret(w, this.depth, (this.depth - 1) * 2 + Math.floor(rng() * 2));
+        applySecret(w, this.depth, (this.depth - 1) * 2 + Math.floor(rng() * 2), this.opts.hatch ?? null);
         break;
       case "boss":
       case "final":
@@ -264,7 +306,7 @@ export class Floor {
       default: {
         const t = template!;
         const guards = Math.min(t.slots.length, 3 + def.extra + Math.floor(node.depth / 2));
-        applyTemplate(w, t, this.depth, guards, rng, { elite: node.type === "miniboss", mirror: node.mirror });
+        applyTemplate(w, t, sec ?? this.depth, guards, rng, { elite: node.type === "miniboss", mirror: node.mirror });
       }
     }
     for (const side of SIDES) {
@@ -314,7 +356,7 @@ export class Floor {
     if (events.some((e) => e.type === "secretOpen")) {
       for (const r of this.rooms) if (r.type === "secret") r.hidden = false;
     }
-    if (!this.cleared && (this.node.type === "boss" || this.node.type === "final") && w.cleared && w.hadEnemies) {
+    if (!this.cleared && (this.node.type === "boss" || this.node.type === "final" || this.node.type === "guardian") && w.cleared && w.hadEnemies) {
       this.cleared = true;
       events.push({ type: "floorCleared" });
     }

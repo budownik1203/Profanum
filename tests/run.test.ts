@@ -99,3 +99,78 @@ test("the catacombs hide behind a cracked wall that a few shots break open", () 
   }
   assert.fail("no floor with catacombs among the seeds");
 });
+
+// ------------------------------------------------------------------ secret floors
+/** Walk into the catacombs of the run's current floor (built on the spot). */
+function intoCatacombs(run: Run): void {
+  const secret = run.floor.rooms.find((r) => r.type === "secret")!;
+  run.floor.travel("N", secret.id);
+}
+
+test("the catacombs of floors 1-4 hide a padlocked trapdoor to a secret floor", () => {
+  const want: Record<number, string | undefined> = { 1: "ossuarium", 2: "ossuarium", 3: "lochy", 4: "lochy", 5: undefined };
+  for (let depth = 1; depth <= 5; depth++) {
+    const run = new Run({ seed: 21 });
+    while (run.depth < depth) run.descend();
+    intoCatacombs(run);
+    const hatch = run.world.interactables.find((i) => i.kind === "hatch");
+    assert.equal(hatch?.ref, want[depth], `floor ${depth}`);
+  }
+});
+
+test("a key opens the trapdoor; the secret floor leads down to the next floor", () => {
+  const run = new Run({ seed: 21 });
+  intoCatacombs(run);
+  const hatch = run.world.interactables.find((i) => i.kind === "hatch")!;
+  run.world.player.keys = 0;
+  run.world.player.pos = { ...hatch.pos };
+  let ev = run.update(DT, { ...idleInput(), interact: true });
+  assert.ok(ev.some((e) => e.type === "needKey"), "no key, no way down");
+  assert.equal(run.secret, null);
+  run.world.player.keys = 1;
+  ev = run.update(DT, { ...idleInput(), interact: true });
+  assert.ok(ev.some((e) => e.type === "hatch"));
+  assert.equal(run.secret, "ossuarium");
+  assert.equal(run.depth, 1, "a secret floor lies between floors");
+  assert.equal(run.world.theme, "ossuarium");
+  assert.equal(run.player.keys, 0);
+  // the layout: a landing, fights, a vault with a reliquary, the guardian
+  const types = run.floor.rooms.map((r) => r.type);
+  assert.deepEqual([...types].sort(), ["combat", "combat", "combat", "guardian", "start", "treasure"]);
+  const vault = run.floor.rooms.find((r) => r.type === "treasure")!;
+  run.floor.travel("N", vault.id);
+  assert.ok(run.world.chests.some((c) => c.tier === "reliquary"), "the vault holds a reliquary");
+  // the guardian falls: echo, a heart and the stairs on
+  const guard = run.floor.rooms.find((r) => r.type === "guardian")!;
+  run.floor.travel("N", guard.id);
+  const elite = run.world.units.find((u) => u.elite);
+  assert.ok(elite && elite.kind === "abomination", "the ossuary's guardian");
+  for (const u of run.world.units) u.hp = 0.01;
+  run.world.player.pos = { x: run.world.room.w / 2, y: run.world.room.h - 200 };
+  ev = [];
+  for (let t = 0; t < 4 && !run.world.interactables.some((i) => i.kind === "stairs"); t += DT) {
+    const target = run.world.units.find((u) => u.alive && u.team !== "minion");
+    ev.push(...run.update(DT, { ...idleInput(target?.pos ?? run.world.player.pos), shoot: true }));
+  }
+  const stairs = run.world.interactables.find((i) => i.kind === "stairs");
+  assert.ok(stairs, "the way on");
+  assert.ok(run.world.pickups.some((p) => p.kind === "echo"), "echo of souls");
+  run.world.player.pos = { ...stairs!.pos };
+  run.update(DT, { ...idleInput(), interact: true });
+  assert.equal(run.secret, null);
+  assert.equal(run.depth, 2, "out onto the slums");
+  // its trapdoor does not open twice in one run
+  intoCatacombs(run);
+  assert.equal(run.world.interactables.some((i) => i.kind === "hatch"), false);
+});
+
+test("a run saved on a secret floor comes back there", () => {
+  const run = new Run({ seed: 33 });
+  while (run.depth < 3) run.descend();
+  run.enterSecret("lochy");
+  const back = new Run({}, run.snapshot());
+  assert.equal(back.secret, "lochy");
+  assert.equal(back.depth, 3);
+  assert.equal(back.world.theme, "lochy");
+  assert.deepEqual(back.secretsSeen, ["lochy"]);
+});

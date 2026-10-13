@@ -17,3 +17,10 @@ test("a whole run can be played from the first room to the death of the Holy Fla
   assert.ok(!r.problems.some((p) => p.includes("non-number")), r.problems.join("; "));
   assert.ok(r.avgStepMs < 1, `a simulation step takes ${r.avgStepMs.toFixed(3)} ms`);
 });
+
+test("the bot can take a trapdoor down to a secret floor and come out on the floor below", () => {
+  const r = playRun(1102, { god: true, secrets: true, maxDepth: 3 });
+  assert.ok(r.secretFloors.length >= 1, `went down a trapdoor (${r.problems.join("; ")})`);
+  assert.ok(r.depth >= 3, `came out below: floor ${r.depth}`);
+  assert.ok(!r.problems.some((p) => p.includes("no way on")), r.problems.join("; "));
+});

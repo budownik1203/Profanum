@@ -406,10 +406,10 @@ function landLob(w: World, b: Bullet): void {
     case "flare": {
       // a lamplighter's flare: a short fire and, for a few seconds, light over half the room
       w.events.push({ type: "explosion", pos: { ...at }, radius: 50 });
-      addZone(w, { kind: "fire", pos: { ...at }, radius: 40, life: 3.5, warn: 0, side: b.side, dps: 3, burst: 0, halves: 1 });
-      const glare = w.addLight("fire", at, { radius: l.radius });
-      glare.life = 3.5;
-      ring(w, at, 10, 200, w.rng() * Math.PI, { side: b.side, radius: 9, look: "ember", life: 3, damage: 3, halves: 1 });
+      addZone(w, { kind: "fire", pos: { ...at }, radius: l.radius, life: 3.5, warn: 0, side: b.side, dps: 3, burst: 0, halves: 1 });
+      const glare = w.addLight("fire", at, { radius: CONFIG.flare.light });
+      glare.life = CONFIG.flare.time;
+      ring(w, at, 8, 180, w.rng() * Math.PI, { side: b.side, radius: 9, look: "ember", life: 3, damage: 3, halves: 1 });
       break;
     }
   }

@@ -131,7 +131,7 @@ async function boot(): Promise<void> {
 
   const floorBanner = (r: Run) => {
     const theme = r.world.theme;
-    showBanner(t(`floor.${theme}`), r.depth <= 5 ? t("floorNum", { n: r.depth }) : undefined, 3.2);
+    showBanner(t(`floor.${theme}`), r.secret ? t("floorSecret") : r.depth <= 5 ? t("floorNum", { n: r.depth }) : undefined, 3.2);
   };
 
   const newRun = () => {
@@ -330,6 +330,8 @@ async function boot(): Promise<void> {
               return { text: t("hub.stairs", { name: t(`char.${meta.selected}`) }), pos };
             }
             return { text: t("prompt.stairs"), pos };
+          case "hatch":
+            return { text: t(w.player.keys > 0 ? "prompt.hatch" : "prompt.hatchNoKey"), sub: t("prompt.hatchSub"), pos };
           case "altar": {
             const o = altarOffer(w, it);
             if (o.kind === "legend") return { text: t("prompt.altarLegend", { name: t(`weapon.${o.legend}`), n: o.cost, w: soulsWord(o.cost) }), sub: t(`weaponDesc.${o.legend}`), pos };
@@ -452,7 +454,8 @@ async function boot(): Promise<void> {
 
   const roomTitle = (r: Run): string => {
     const n = r.floor.node;
-    if (n.type === "start") return r.depth === 1 ? t("room.start1") : t("room.start");
+    if (n.type === "start") return r.secret ? t("room.landing") : r.depth === 1 ? t("room.start1") : t("room.start");
+    if (n.type === "guardian") return t("room.guardian");
     if (n.type === "combat") return t(`room.${n.layout}`);
     if (n.type === "boss") return t(`unit.${r.world.units.find((u) => u.def.boss)?.kind ?? "captain"}`);
     return t(`room.${n.type}`);

@@ -31,6 +31,8 @@ export interface RunReport {
   raised: number;
   legends: number;
   secrets: number;
+  /** Secret floors the bot went down to. */
+  secretFloors: string[];
   bought: number;
   maxBullets: number;
   /** Wall-clock milliseconds per simulation step. */
@@ -46,6 +48,8 @@ export interface RunOptions {
   maxDepth?: number;
   /** Simulated seconds before giving up. */
   maxTime?: number;
+  /** Take the trapdoors in the catacombs down to the secret floors (with a key in hand). */
+  secrets?: boolean;
 }
 
 const DT = 1 / 60;
@@ -80,7 +84,7 @@ function nextStep(floor: Floor, goal: (r: RoomNode) => boolean): { side: Side; t
 }
 
 interface Goal {
-  kind: "pickup" | "buy" | "chest" | "altar" | "secret" | "stairs";
+  kind: "pickup" | "buy" | "chest" | "altar" | "secret" | "stairs" | "hatch";
   key: string;
   pos: Vec;
   /** Close enough to act (interact or shoot). */
@@ -90,7 +94,7 @@ interface Goal {
 }
 
 /** What a quiet room still has for the bot, in order: loot, a purchase, chests, the altar, a cracked wall, the stairs. */
-function quietGoal(w: World, p: Player, skip: Set<string>, bought: boolean, wallTime: number): Goal | null {
+function quietGoal(w: World, p: Player, skip: Set<string>, bought: boolean, wallTime: number, secrets = false): Goal | null {
   const goals: Goal[] = [];
   const pickups = [...w.pickups].filter((pk) => pk.delay <= 0).sort((a, b) => dist(a.pos, p.pos) - dist(b.pos, p.pos));
   for (const pk of pickups) {
@@ -101,7 +105,8 @@ function quietGoal(w: World, p: Player, skip: Set<string>, bought: boolean, wall
   }
   for (const c of w.chests) {
     if (c.opened || c.broken) continue;
-    if (p.keys > 0) goals.push({ kind: "chest", key: `chest:${c.id}`, pos: c.pos, reach: 80, interact: true });
+    // a bot heading for the secret floors keeps one key for the trapdoor
+    if (p.keys > (secrets ? 1 : 0)) goals.push({ kind: "chest", key: `chest:${c.id}`, pos: c.pos, reach: 80, interact: true });
     else goals.push({ kind: "chest", key: `smash:${c.id}`, pos: c.pos, reach: 260, aim: c.pos });
   }
   const altar = w.interactables.find((i) => i.kind === "altar");
@@ -111,6 +116,8 @@ function quietGoal(w: World, p: Player, skip: Set<string>, bought: boolean, wall
     const inward = { N: vec(0, 1), S: vec(0, -1), W: vec(1, 0), E: vec(-1, 0) }[secret.side ?? "N"];
     goals.push({ kind: "secret", key: `secret:${secret.id}`, pos: add(secret.pos, scale(inward, 300)), reach: 60, aim: secret.pos });
   }
+  const hatch = w.interactables.find((i) => i.kind === "hatch" && !i.used);
+  if (secrets && hatch && p.keys > 0) goals.push({ kind: "hatch", key: "hatch", pos: hatch.pos, reach: 60, interact: true });
   const stairs = w.interactables.find((i) => i.kind === "stairs");
   if (stairs) goals.push({ kind: "stairs", key: "stairs", pos: stairs.pos, reach: 60, interact: true });
   return goals.find((g) => !skip.has(g.key)) ?? null;
@@ -128,7 +135,7 @@ export function playRun(seed: number, o: RunOptions = {}): RunReport {
   const mem = newBot();
   const rep: RunReport = {
     seed, victory: false, dead: false, depth: 1, time: 0, rooms: 1, stuck: 0, stalled: 0, bosses: [], halvesLost: 0, kills: 0, raised: 0,
-    legends: 0, secrets: 0, bought: 0, maxBullets: 0, avgStepMs: 0, maxStepMs: 0, problems: [],
+    legends: 0, secrets: 0, secretFloors: [], bought: 0, maxBullets: 0, avgStepMs: 0, maxStepMs: 0, problems: [],
   };
   let steps = 0;
   let totalMs = 0;
@@ -188,7 +195,7 @@ export function playRun(seed: number, o: RunOptions = {}): RunReport {
       }
     } else {
       // ---- a quiet room: loot, then the way on
-      const goal = quietGoal(w, run.player, skip, boughtHere, wallTime);
+      const goal = quietGoal(w, run.player, skip, boughtHere, wallTime, o.secrets);
       if (goal) {
         const d = dist(goal.pos, p.pos);
         if (goal.key !== goalKey) {
@@ -212,14 +219,20 @@ export function playRun(seed: number, o: RunOptions = {}): RunReport {
           if (goal.kind === "buy") boughtHere = true;
           if (goal.kind === "altar") skip.add(goal.key);
         }
-        // no closer for a while: give this one up (or, for a pickup lying at the feet, it is not wanted)
-        if (goalT > 3 || (goal.kind === "pickup" && d < 40 && goalT > 1.5)) {
+        // the way on can't be given up: the bot only walks straight lines, so it gets carried past whatever blocks it
+        if ((goal.kind === "stairs" || goal.kind === "hatch") && goalT > 3) {
+          rep.stuck += 1;
+          p.pos = w.collideWorld({ ...goal.pos }, 20);
+          goalT = 0;
+        } else if (goalT > 3 || (goal.kind === "pickup" && d < 40 && goalT > 1.5)) {
+          // no closer for a while: give this one up (or, for a pickup lying at the feet, it is not wanted)
           skip.add(goal.key);
           goalT = 0;
         }
       } else {
-        // the nearest room not yet seen, then the boss
-        const step = nextStep(floor, (r) => !r.visited && r.type !== "boss" && r.type !== "final") ?? nextStep(floor, (r) => r.type === "boss" || r.type === "final");
+        // the nearest room not yet seen, then the boss (or a secret floor's guardian)
+        const last = (r: RoomNode) => r.type === "boss" || r.type === "final" || r.type === "guardian";
+        const step = nextStep(floor, (r) => !r.visited && !last(r)) ?? nextStep(floor, last);
         if (step) {
           const c = w.doorCenter(step.side);
           const out = { N: vec(0, -1), S: vec(0, 1), W: vec(-1, 0), E: vec(1, 0) }[step.side];
@@ -235,7 +248,7 @@ export function playRun(seed: number, o: RunOptions = {}): RunReport {
             progressT = 0;
             progressAt = { ...p.pos };
           }
-        } else if (!(node.type === "boss" || node.type === "final")) {
+        } else if (!(node.type === "boss" || node.type === "final" || node.type === "guardian")) {
           rep.problems.push(`no way on from room ${node.id} on floor ${run.depth}`);
           break;
         }
@@ -256,6 +269,7 @@ export function playRun(seed: number, o: RunOptions = {}): RunReport {
       if (e.type === "enterRoom") rep.rooms += 1;
       if (e.type === "legend") rep.legends += 1;
       if (e.type === "secretOpen") rep.secrets += 1;
+      if (e.type === "hatch") rep.secretFloors.push(e.secret);
       if (e.type === "buy") rep.bought += 1;
       if (e.type === "bossDeath") {
         rep.bosses.push({ kind: e.boss, seconds: Math.round(bossT) });

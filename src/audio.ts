@@ -626,6 +626,10 @@ export class GameAudio {
         case "buy":
           this.coins(0, 0.6, 4);
           break;
+        case "hatch":
+          this.creak(0, 0.8);
+          this.clank(0, 0.4);
+          break;
         case "chestOpen":
           this.creak(at(e.pos)[0], 0.6);
           this.coins(at(e.pos)[0], 0.4, 3);

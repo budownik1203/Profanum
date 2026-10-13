@@ -10,6 +10,7 @@ import { makePlayer, recomputeStats } from "./stats.js";
 import type { GameEvent, InputState, Player, RitualForm } from "./types.js";
 import type { World } from "./world.js";
 import type { UnitKind } from "./data/units.js";
+import { secretUnder, type SecretId } from "./data/floors.js";
 import { vec } from "./math.js";
 
 export interface RunStats {
@@ -30,6 +31,10 @@ export interface SavedRun {
   grace: boolean;
   echo: number;
   stats: RunStats;
+  /** Saved on a secret floor: which one (the run resumes there). */
+  secret?: SecretId | null;
+  /** Secret floors already visited this run (their trapdoors don't appear again). */
+  secretsSeen?: SecretId[];
   player: {
     halves: number;
     maxHalves: number;
@@ -65,6 +70,9 @@ export class Run {
   /** Echo of Souls gathered this run (kept after death, spent in the crypt). */
   echo = 0;
   stats: RunStats = { kills: 0, raised: 0, gold: 0, time: 0, bosses: [], depth: 1 };
+  /** On a secret floor under the catacombs right now. */
+  secret: SecretId | null = null;
+  secretsSeen: SecretId[] = [];
   over = false;
   victory = false;
 
@@ -83,6 +91,8 @@ export class Run {
       this.depth = saved.depth;
       this.echo = saved.echo;
       this.stats = { ...saved.stats };
+      this.secret = saved.secret ?? null;
+      this.secretsSeen = [...(saved.secretsSeen ?? [])];
       restorePlayer(this.player, saved);
     }
     this.floor = this.makeFloor();
@@ -96,7 +106,19 @@ export class Run {
   forceBosses: Partial<Record<number, UnitKind>> = {};
 
   private makeFloor(): Floor {
-    return new Floor(this.seed + this.depth * 7717, { depth: this.depth, player: this.player, pool: this.pool, grace: this.grace, boss: this.forceBosses[this.depth] });
+    if (this.secret) {
+      return new Floor(this.seed + this.depth * 7717 + 4243, { depth: this.depth, player: this.player, pool: this.pool, grace: this.grace, secret: this.secret });
+    }
+    const under = secretUnder(this.depth);
+    const hatch = under && !this.secretsSeen.includes(under) ? under : null;
+    return new Floor(this.seed + this.depth * 7717, { depth: this.depth, player: this.player, pool: this.pool, grace: this.grace, boss: this.forceBosses[this.depth], hatch });
+  }
+
+  /** Down through the trapdoor in the catacombs: a secret floor (the minions stay behind, as on the stairs). */
+  enterSecret(id: SecretId): void {
+    this.secret = id;
+    if (!this.secretsSeen.includes(id)) this.secretsSeen.push(id);
+    this.floor = this.makeFloor();
   }
 
   update(dt: number, input: InputState): GameEvent[] {
@@ -133,11 +155,18 @@ export class Run {
       this.descend();
       events.push({ type: "enterRoom", room: 0, side: "S" });
     }
+    const hatch = events.find((e) => e.type === "hatch");
+    if (hatch && hatch.type === "hatch") {
+      this.enterSecret(hatch.secret as SecretId);
+      events.push({ type: "enterRoom", room: 0, side: "S" });
+    }
     return events;
   }
 
   /** Down the stairs: a new floor, without the army (design doc: Sługi). */
   descend(): void {
+    // a secret floor's stairs lead to the floor below the one it hides under
+    this.secret = null;
     this.depth = Math.min(6, this.depth + 1);
     this.stats.depth = Math.max(this.stats.depth, this.depth);
     // a new floor begins at full ammunition for nothing: what you carry is what you have
@@ -154,6 +183,8 @@ export class Run {
       grace: this.grace,
       echo: this.echo,
       stats: { ...this.stats, bosses: [...this.stats.bosses] },
+      secret: this.secret,
+      secretsSeen: [...this.secretsSeen],
       player: {
         halves: p.halves,
         maxHalves: p.maxHalves,

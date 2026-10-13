@@ -10,14 +10,14 @@
  */
 import { CONFIG } from "./config.js";
 import { type Vec, vec } from "./math.js";
-import { floorDef, type FloorDef } from "./data/floors.js";
+import { floorDef, type FloorDef, type SecretFloorDef, type SecretId } from "./data/floors.js";
 import type { UnitKind } from "./data/units.js";
 import type { LightKind, Side } from "./types.js";
 import type { World } from "./world.js";
 import { addChest, placePickup, stockShop } from "./loot.js";
 import { pick } from "./shared.js";
 
-export type RoomType = "start" | "combat" | "treasure" | "shop" | "altar" | "miniboss" | "boss" | "secret" | "final";
+export type RoomType = "start" | "combat" | "treasure" | "shop" | "altar" | "miniboss" | "boss" | "secret" | "final" | "guardian";
 
 type CoverRole = "f" | "s" | "b";
 type SlotRole = "m" | "r" | "s" | "p" | "l";
@@ -160,8 +160,8 @@ function kindFor(def: FloorDef, role: SlotRole, rng: () => number): UnitKind {
 }
 
 /** A combat (or mini-boss) room from a template, peopled by the floor's factions. */
-export function applyTemplate(w: World, t: Template, depth: number, guardCount: number, rng: () => number, opts: { elite?: boolean; mirror?: boolean } = {}): void {
-  const def = floorDef(depth);
+export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorDef, guardCount: number, rng: () => number, opts: { elite?: boolean; mirror?: boolean } = {}): void {
+  const def = typeof depthOrDef === "number" ? floorDef(depthOrDef) : depthOrDef;
   const mirror = opts.mirror ?? false;
   const mx = (x: number, width = 0) => (mirror ? w.room.w - x - width : x);
   w.theme = def.id;
@@ -265,7 +265,7 @@ export function applyAltar(w: World, depth: number): void {
 }
 
 /** Catacombs under the floor: a reliquary, a bone shrine, a note and an echo of souls. */
-export function applySecret(w: World, depth: number, noteIndex: number): void {
+export function applySecret(w: World, depth: number, noteIndex: number, hatch: SecretId | null = null): void {
   w.theme = "krypta";
   w.dark = true;
   w.alarm = false;
@@ -276,6 +276,44 @@ export function applySecret(w: World, depth: number, noteIndex: number): void {
   w.addLight("candle", vec(w.room.w / 2 - 300, w.room.h / 2 - 20));
   w.addLight("candle", vec(w.room.w / 2 + 300, w.room.h / 2 - 20));
   w.addLight("brazier", vec(w.room.w / 2, w.room.h / 2 + 260));
+  // a trapdoor with a padlock: the way down to a secret floor
+  if (hatch) {
+    const at = vec(w.room.w / 2 + 330, w.room.h / 2 + 250);
+    w.addInteractable("hatch", at, { radius: 80, ref: hatch });
+    w.addLight("candle", vec(at.x - 100, at.y - 40));
+  }
+}
+
+/** The bottom of the ladder on a secret floor: quiet, dark, a single candle. */
+export function applyLanding(w: World, def: SecretFloorDef): void {
+  w.theme = def.id;
+  w.dark = true;
+  w.alarm = false;
+  w.addCover(380, 380, 150, 36, def.flip);
+  w.addCover(870, 380, 150, 36, def.flip);
+  w.addLight("candle", vec(700, 300));
+  w.addLight("torch", vec(350, 92), { wall: "N" });
+  w.addLight("torch", vec(1050, 92), { wall: "N" });
+}
+
+/** A secret floor's vault: always a reliquary, and gold for whoever got this far. */
+export function applyVault(w: World, def: SecretFloorDef): void {
+  w.theme = def.id;
+  w.dark = true;
+  w.alarm = false;
+  addChest(w, "reliquary", vec(w.room.w / 2, w.room.h / 2 - 40));
+  for (let i = 0; i < 6; i++) placePickup(w, "gold", vec(w.room.w / 2 - 150 + i * 60, w.room.h / 2 + 140), 5);
+  w.addLight("candle", vec(w.room.w / 2 - 120, w.room.h / 2 - 90));
+  w.addLight("candle", vec(w.room.w / 2 + 120, w.room.h / 2 - 90));
+}
+
+/** The guardian of a secret floor: an elite with his escort in one of the usual rooms. */
+export function applyGuardian(w: World, t: Template, def: SecretFloorDef, rng: () => number): void {
+  applyTemplate(w, t, def, 0, rng);
+  w.alarm = true;
+  const c = vec(w.room.w / 2, w.room.h * 0.4);
+  w.spawn(def.guardian, c, undefined, { elite: true });
+  def.escort.forEach((k, i) => w.spawn(k, vec(c.x + (i - 1) * 240, c.y + 160 + (i % 2) * 60)));
 }
 
 /** Room sizes for the special rooms. */
@@ -297,6 +335,8 @@ export function roomSize(type: RoomType, template?: Template): { w: number; h: n
     case "boss":
     case "final":
       return { w: 2200, h: 1400 };
+    case "guardian":
+      return template ? { w: template.w, h: template.h } : { w: CONFIG.room.width, h: CONFIG.room.height };
   }
 }
 

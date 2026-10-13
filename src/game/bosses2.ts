@@ -208,7 +208,10 @@ export function onPhase2(c: Ctx): boolean {
       return true;
     case "organist":
       relightNear(c, ["candelabra", "chandelier"], 3000, 3);
-      for (let i = 0; i < PIPES; i++) shot(c, pipeMouth(i), vec(0, 1), 230, { look: "note", radius: 10 });
+      for (let i = 0; i < PIPES; i++) {
+        const v = pipeVoice(c, i);
+        shot(c, v.from, v.dir, 230, { look: "note", radius: 10 });
+      }
       return true;
     case "glassangel":
       // her glass cracks
@@ -787,8 +790,8 @@ function lampmaster(c: Ctx): void {
       stand(c);
       if (b.n === 0 && b.t >= 0.45) {
         b.n = 1;
-        const to = add(c.target, fromAngle(w.rng() * TAU, 120));
-        lob(w, add(u.pos, vec(0, -60)), w.collideWorld(to, 40), B(c, { look: "torch", radius: 10, damage: 0 }), "flare", 560, 1.1, 260);
+        const to = add(c.target, fromAngle(w.rng() * TAU, 160));
+        lob(w, add(u.pos, vec(0, -60)), w.collideWorld(to, 40), B(c, { look: "torch", radius: 10, damage: 0 }), "flare", 45, 1.1, 260);
       }
       if (b.t >= 1.2) rest(c, 1);
       break;
@@ -1014,6 +1017,16 @@ export const ORGAN = { x0: 420, x1: 1780, top: 250, y: 430 };
 export const PIPES = 7;
 export const pipeMouth = (i: number): Vec => vec(500 + i * 200, ORGAN.y + 14);
 
+/**
+ * Where a pipe sounds from and which way: towards the nave, or, if the necromancer went round the
+ * organ to hide behind it, out of the pipe tops and back at him.
+ */
+function pipeVoice(c: Ctx, i: number): { from: Vec; dir: Vec } {
+  const m = pipeMouth(i);
+  if (c.target.y < ORGAN.top) return { from: vec(m.x, ORGAN.top - 14), dir: vec(0, -1) };
+  return { from: m, dir: vec(0, 1) };
+}
+
 /** Which pipe stays silent in a chord: one near the necromancer, never the same twice. */
 function silentPipe(c: Ctx): number {
   const near = clamp(Math.round((c.w.player.pos.x - 500) / 200), 0, PIPES - 1);
@@ -1043,7 +1056,8 @@ function organist(c: Ctx): void {
       const order = [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 0];
       if (b.n < order.length && b.t >= 0.4 + b.n * step) {
         const i = order[b.n];
-        fan(w, pipeMouth(i), vec(0, 1), 3, 0.36, 220, B(c, { look: "note", radius: 10, life: 8 }));
+        const v = pipeVoice(c, i);
+        fan(w, v.from, v.dir, 3, 0.36, 220, B(c, { look: "note", radius: 10, life: 8 }));
         b.mem.pipe = i;
         b.n += 1;
       }
@@ -1057,7 +1071,7 @@ function organist(c: Ctx): void {
       const per = wind + 0.5;
       const k = Math.floor(b.t / per);
       if (k >= chords) {
-        rest(c, 1);
+        rest(c, 1.4);
         break;
       }
       if (b.n === k * 2) {
@@ -1069,8 +1083,8 @@ function organist(c: Ctx): void {
         b.n += 1;
         for (let i = 0; i < PIPES; i++) {
           if (i === b.mem.silent) continue;
-          const m = pipeMouth(i);
-          for (const dx of [-50, 0, 50]) shot(c, vec(m.x + dx, m.y), vec(0, 1), 220, { look: "note", radius: 10, life: 8 });
+          const v = pipeVoice(c, i);
+          for (const dx of [-50, 0, 50]) shot(c, vec(v.from.x + dx, v.from.y), v.dir, 220, { look: "note", radius: 10, life: 8 });
         }
       }
       break;
@@ -1107,22 +1121,22 @@ function organist(c: Ctx): void {
         const { w: RW } = w.room;
         const spots = [vec(110, 760), vec(RW - 110, 760), vec(110, 1150), vec(RW - 110, 1150)];
         const r = Math.floor(w.rng() * 4);
-        for (let i = 0; i < 3; i++) summon(c, "acolyte", spots[(r + i) % 4]);
-        b.mem.crowdCd = 16;
+        for (let i = 0; i < (b.phase >= 2 ? 3 : 2); i++) summon(c, "acolyte", spots[(r + i) % 4]);
+        b.mem.crowdCd = 22;
       }
       if (b.t >= 1.3) rest(c, 1);
       break;
     case "toccata":
       // the toccata: pipes at random, fast, every note aimed at you
       b.mem.emit = (b.mem.emit ?? 0) - c.dt;
-      if (b.mem.emit <= 0 && b.t >= 0.4 && b.t < 3.4) {
-        b.mem.emit = 0.16;
+      if (b.mem.emit <= 0 && b.t >= 0.4 && b.t < 3) {
+        b.mem.emit = 0.2;
         const i = Math.floor(w.rng() * PIPES);
-        const m = pipeMouth(i);
+        const m = pipeVoice(c, i).from;
         b.mem.pipe = i;
         shot(c, m, norm(sub(c.target, m)), 270, { look: "note", radius: 10 });
       }
-      if (b.t >= 3.8) rest(c, 1.2);
+      if (b.t >= 3.4) rest(c, 1.3);
       break;
     case "relight":
       relightStep(c, ["candelabra", "chandelier"], 3000, 2, 1.2, 11);

@@ -186,6 +186,13 @@ export function onRoomCleared(w: World): void {
     p.relic.charge = Math.min(max, p.relic.charge + 1 + p.stats.relicChargeBonus);
     if (before < max && p.relic.charge >= max) w.events.push({ type: "relicReady", relic: p.relic.id });
   }
+  if (w.roomType === "guardian") {
+    // the guardian of a secret floor falls: Echo of Souls, a heart, a note and the way on
+    const c = { x: w.room.w / 2, y: w.room.h / 2 };
+    placePickup(w, "echo", add(c, vec(-80, 90)), w.ctx.secretEcho ?? 10);
+    placePickup(w, "heart", add(c, vec(80, 90)));
+    w.addInteractable("stairs", c, { radius: 80 });
+  }
   if (w.roomType === "combat" && w.rng() < CONFIG.loot.roomRewardChance) {
     const r = w.rng();
     const kind: PickupKind = r < 0.35 ? "ammoBox" : r < 0.6 ? "halfHeart" : r < 0.8 ? "gold" : r < 0.92 ? "key" : "heart";
@@ -379,6 +386,16 @@ function useThing(w: World, it: Interactable): boolean {
   switch (it.kind) {
     case "stairs":
       w.events.push({ type: "stairs" });
+      return true;
+    case "hatch":
+      // the padlock takes a key; below lies a secret floor
+      if (w.player.keys <= 0) {
+        w.events.push({ type: "needKey", pos: { ...it.pos } });
+        return false;
+      }
+      w.player.keys -= 1;
+      it.used = true;
+      w.events.push({ type: "hatch", secret: it.ref ?? "ossuarium" });
       return true;
     case "altar":
       return useAltar(w, it);

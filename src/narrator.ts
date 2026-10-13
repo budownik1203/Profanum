@@ -44,6 +44,8 @@ const LINES: Record<string, Line[]> = {
   "floor.klasztor": [["Klasztor. Cisza modlitwy, którą zaraz przerwiesz.", "The monastery. A prayerful silence you are about to break."]],
   "floor.katedra": [["Katedra. Złoto, karmazyn i kłamstwo wyryte w kamieniu.", "The cathedral. Gold, crimson, and a lie carved in stone."]],
   "floor.sanktuarium": [["Pod ołtarzem coś oddycha. Coś, co nazywają świętym.", "Beneath the altar something breathes. Something they call holy."]],
+  "floor.ossuarium": [["Ossuarium. Tu składali kości tych, dla których zabrakło miejsca na cmentarzu. Wszyscy na ciebie czekali.", "The Ossuary. Where they stacked the bones of those the cemetery had no room for. They have all been waiting for you."]],
+  "floor.lochy": [["Lochy Inkwizycji. Każdy kamień tutaj słyszał spowiedź, której nikt nie chciał złożyć.", "The Inquisition's dungeons. Every stone here has heard a confession nobody wanted to make."]],
   ambush: [
     ["Z mroku, jak przystało.", "From the dark, as it should be."],
     ["Nie zdążył nawet się przeżegnać.", "He never even crossed himself."],

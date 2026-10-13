@@ -53,6 +53,8 @@ export interface WorldContext {
   alarmNeighbours?: () => void;
   /** Weapons, items and relics that can drop this run (the crypt unlocks more). */
   pool?: string[];
+  /** On a secret floor: the Echo of Souls its guardian guards. */
+  secretEcho?: number;
 }
 
 export class World {

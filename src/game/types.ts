@@ -427,7 +427,7 @@ export interface Chest {
   mimic: boolean;
 }
 
-export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger";
+export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger" | "hatch";
 
 export interface Interactable {
   id: number;
@@ -531,6 +531,7 @@ export type GameEvent =
   | { type: "abomination"; pos: Vec; corpses: number }
   | { type: "secretOpen"; pos: Vec }
   | { type: "stairs" }
+  | { type: "hatch"; secret: string }
   | { type: "note"; index: number }
   | { type: "station"; ref: string }
   | { type: "bossIntro"; boss: UnitKind }
