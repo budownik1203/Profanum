@@ -29,6 +29,7 @@ import { GameRenderer, type Prompt } from "./render/renderer.js";
 import { Screens, type InvRow, type InvSection, type MenuView } from "./render/screens.js";
 import { buildCodexView } from "./render/codexview.js";
 import { CODEX_SECTIONS, noteEvents, noteWorld } from "./game/codex.js";
+import { styleOf } from "./game/necro.js";
 import { type Drill, formSquads } from "./game/tactics.js";
 import { planRoom } from "./game/reinforce.js";
 import { floorDef } from "./game/data/floors.js";
@@ -339,9 +340,10 @@ async function boot(): Promise<void> {
     const pos = target.pos;
     switch (target.kind) {
       case "corpse":
-        return { text: t("prompt.raise", { n: w.player.stats.raiseCost, w: soulsWord(w.player.stats.raiseCost) }), pos };
+        if (styleOf(w) === "organs") return { text: t("prompt.harvest"), pos };
+        return { text: t(styleOf(w) === "bones" ? "prompt.raiseBones" : styleOf(w) === "spirits" ? "prompt.raiseSpirit" : "prompt.raise", { n: w.player.stats.raiseCost, w: soulsWord(w.player.stats.raiseCost) }), pos };
       case "abomination":
-        return { text: t("prompt.abomination", { n: CONFIG.necro.abominationCost, w: soulsWord(CONFIG.necro.abominationCost) }), pos };
+        return { text: t("prompt.stitch", { n: w.player.organs ?? 0, m: CONFIG.necro.abominationOrgans }), pos };
       case "chest":
         return { text: w.player.keys > 0 ? t("prompt.open") : t("prompt.openNoKey"), pos };
       case "pickup": {

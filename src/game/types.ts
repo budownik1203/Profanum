@@ -139,6 +139,8 @@ export interface Player {
   seenSynergies?: string[];
   /** Seconds of being slowed (tears, ink, a sprung trap). */
   slow?: number;
+  /** The plague doctor's jar of organs, for his abomination. */
+  organs?: number;
 }
 
 // ------------------------------------------------------------------ units
@@ -229,6 +231,12 @@ export interface Unit {
   master?: number;
   /** Lying in wait (an ambush): unseen and still until the necromancer comes close or the alarm sounds. */
   hidden?: boolean;
+  /** The fallen priest's fanatics: light doesn't wear them down, it makes them stronger. */
+  zealot?: boolean;
+  /** The witch's hanged: on her rope, thrown at enemies and pulled back. */
+  hanged?: boolean;
+  /** Flying through the air after the witch threw him (seconds left), and where he lands. */
+  thrown?: number;
   alive: boolean;
 }
 
@@ -575,6 +583,15 @@ export type GameEvent =
   | { type: "riteBroken"; pos: Vec }
   /** The hunt reached this room. */
   | { type: "hunt"; pos: Vec }
+  /** The plague doctor took the organs out of a body (and fed them to his abomination, if he has one). */
+  | { type: "harvest"; pos: Vec; organs: number; fed: boolean }
+  /** A wraith's scream: the living run. */
+  | { type: "scream"; pos: Vec }
+  /** The witch threw one of her hanged, or pulled them all back. */
+  | { type: "hangedThrow"; from: Vec; to: Vec }
+  | { type: "hangedRecall"; pos: Vec }
+  /** A thrown hanged one lands. */
+  | { type: "hangedLand"; pos: Vec }
   /** A champion's gift showed itself on his death (a blast, a split, a ring of light). */
   | { type: "championDeath"; pos: Vec; champion: Champion }
   | { type: "explosion"; pos: Vec; radius: number }

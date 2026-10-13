@@ -96,7 +96,7 @@ test("weapon remains become a legend at the altar, for souls", () => {
   assert.equal(p.weapons[p.current].ritual, "guard");
 });
 
-test("three corpses and three souls make an abomination", () => {
+test("the gravedigger stitches no abomination of the bodies lying around", () => {
   const w = new World(makeRng(14));
   const p = w.player;
   for (const dx of [-60, 0, 60]) {
@@ -104,9 +104,8 @@ test("three corpses and three souls make an abomination", () => {
   }
   p.souls = 3;
   const ev = step(w, { ...idleInput(), interact: true }, DT);
-  assert.ok(ev.some((e) => e.type === "abomination"));
-  assert.equal(w.minions.filter((u) => u.kind === "abomination").length, 1);
-  assert.equal(w.corpses.length, 0);
+  assert.ok(!ev.some((e) => e.type === "abomination"));
+  assert.equal(w.minions.filter((u) => u.kind === "abomination").length, 0);
 });
 
 test("relics charge by clearing rooms; the monstrance blinds", () => {

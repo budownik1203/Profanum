@@ -18,6 +18,8 @@ export type UnitKind =
   | "mimic" | "abomination" | "rat"
   // elites: one fighter of each faction, met now and then among the ordinary guards
   | "grenadier" | "butcher" | "confessor" | "summoner"
+  // the necromancers' own servants (never met as enemies)
+  | "skeleton" | "skeletonArcher" | "ghost" | "wraith"
   // bosses: three a floor, then the Holy Flame
   | "executioner" | "exorcist" | "mourner"
   | "captain" | "ratcatcher" | "mobleader"
@@ -46,6 +48,7 @@ export type AiKind =
   | "butcher" // elite of the mob: a meat hook that pulls you in, two cleaver blows
   | "flamer" // elite of the Church: sprays holy fire in a sweeping cone
   | "summoner" // elite of the occultists: circles the wild dead crawl out of, rings of orbs
+  | "wraith" // the lich's wraith: strikes, and screams the living into flight
   | "boss";
 
 export interface ShotDef {
@@ -107,6 +110,10 @@ export interface UnitDef {
   boss?: boolean;
   /** An elite fighter (design: Elity): rarer, dangerous, may carry weapon remains. */
   elite?: boolean;
+  /** Only ever a necromancer's servant (skeletons, ghosts): not in the Grimoire's chapters. */
+  servant?: boolean;
+  /** Passes through covers and pews (ghosts). */
+  phase?: boolean;
 }
 
 const D = (d: UnitDef): UnitDef => d;
@@ -161,6 +168,28 @@ export const UNITS: Record<UnitKind, UnitDef> = {
     range: 420, reposition: [1.2, 2], special: 7,
     shot: { count: 10, spread: 0, speed: 165, radius: 11, look: "orb", life: 5 },
     gold: [6, 10], raisable: true, size: 1.02, elite: true,
+  }),
+  // ---------------------------------------------------------------- servants
+  skeleton: D({
+    kind: "skeleton", faction: "undead", ai: "rusher", hp: 6, radius: 18, speed: 175,
+    reach: 54, windup: 0.25, recover: 0.45, melee: 3,
+    gold: [0, 0], raisable: false, size: 0.95, servant: true,
+  }),
+  skeletonArcher: D({
+    kind: "skeletonArcher", faction: "undead", ai: "gunner", hp: 5, radius: 18, speed: 140,
+    range: 360, reposition: [0.6, 1.2], aim: 0.45, reload: 1.3,
+    shot: { count: 1, spread: 0.06, speed: 560, radius: 6, look: "bone", damage: 3 },
+    gold: [0, 0], raisable: false, size: 0.95, servant: true,
+  }),
+  ghost: D({
+    kind: "ghost", faction: "undead", ai: "rusher", hp: 5, radius: 17, speed: 210,
+    reach: 50, windup: 0.2, recover: 0.4, melee: 2,
+    gold: [0, 0], raisable: false, size: 0.9, servant: true, phase: true,
+  }),
+  wraith: D({
+    kind: "wraith", faction: "undead", ai: "wraith", hp: 16, radius: 21, speed: 180,
+    reach: 64, windup: 0.3, recover: 0.5, melee: 5, special: 6, area: 260,
+    gold: [0, 0], raisable: false, size: 1.1, servant: true, phase: true,
   }),
   // ---------------------------------------------------------------- the mob
   peasant: D({

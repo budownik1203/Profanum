@@ -40,12 +40,26 @@ export function updateUnit(w: World, u: Unit, dt: number): void {
   if (u.team === "minion") {
     const d = CONFIG.darkness;
     const inLight = w.dark && w.isLit(u.pos, false);
-    const rate = !w.dark ? 1 : inLight ? (w.player.stats.synergies.includes("armia") ? 1 : d.minionLightDecay) : d.minionDarkDecay;
+    // the priest's fanatics don't crumble faster in light: they thrive in it
+    const rate = !w.dark ? 1 : inLight ? (u.zealot ? 0.8 : w.player.stats.synergies.includes("armia") ? 1 : d.minionLightDecay) : d.minionDarkDecay;
     u.lifetime -= dt * rate;
     if (u.lifetime <= 0) {
       killUnit(w, u, vec(0, 1), { crumbled: true });
       return;
     }
+  }
+  // the witch threw him: he flies, then lands among them with a crash
+  if (u.thrown !== undefined) {
+    u.thrown -= dt;
+    w.moveUnit(u, vec(), dt);
+    if (u.thrown <= 0) {
+      u.thrown = undefined;
+      const r = CONFIG.rope;
+      hitArea(w, u, u.pos, r.landRadius, r.landDamage);
+      for (const o of w.units) if (o.alive && o.team !== "minion" && !o.def.boss && dist(o.pos, u.pos) < r.landRadius + o.radius) o.st.stun = Math.max(o.st.stun, 0.8);
+      w.events.push({ type: "hangedLand", pos: { ...u.pos } });
+    }
+    return;
   }
   if (u.st.stun > 0) {
     w.moveUnit(u, vec(), dt);
@@ -166,7 +180,8 @@ function nearestOf(w: World, u: Unit, ok: (o: Unit) => boolean, within: number):
 function minionMul(w: World, u: Unit): number {
   if (u.team !== "minion") return 1;
   // the death knell's frenzy doubles every blow
-  return w.player.stats.minionDamageMul * w.sideMul(u.pos, true) * ((u.st.frenzy ?? 0) > 0 ? 2 : 1);
+  const side = u.zealot && w.dark && w.isLit(u.pos) ? CONFIG.necro.zealotLightMul : w.sideMul(u.pos, true);
+  return w.player.stats.minionDamageMul * side * ((u.st.frenzy ?? 0) > 0 ? 2 : 1);
 }
 
 function telegraph(w: World, u: Unit): void {
@@ -985,7 +1000,22 @@ const summoner: Behaviour = (w, u, t, dt) => {
   return keepRange(w, u, t, dt);
 };
 
+/** The lich's wraith: strikes like a ghost, and now and then screams the living into flight. */
+const wraith: Behaviour = (w, u, t, dt) => {
+  if (u.cooldown <= 0 && dist(u.pos, t.pos) < (u.def.area ?? 260)) {
+    u.cooldown = u.def.special ?? 6;
+    for (const o of w.units) {
+      if (!o.alive || o.team === u.team || o.def.boss || dist(o.pos, u.pos) > (u.def.area ?? 260)) continue;
+      o.st.fear = Math.max(o.st.fear, 2);
+      o.fleeFrom = { ...u.pos };
+    }
+    w.events.push({ type: "scream", pos: { ...u.pos } });
+  }
+  return rusher(w, u, t, dt);
+};
+
 const BEHAVIOURS: Record<Exclude<Unit["def"]["ai"], "boss">, Behaviour> = {
+  wraith,
   grenadier,
   butcher,
   flamer,

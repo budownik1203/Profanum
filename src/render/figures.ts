@@ -56,6 +56,9 @@ const LOOKS: Partial<Record<UnitKind, Look>> = {
   knight: { coat: 0xd8d0c0, coatMid: 0x8a8070, skin: 0x8a6e58, head: "greathelm", gear: "sword", shield: true, trim: 0xb8321e, bulk: 1.15 },
   bellringer: { coat: 0x4a3a30, coatMid: 0x2c221c, skin: 0x8a6e58, head: "hood", gear: "handbell", hunch: 0.35 },
   acolyte: { coat: 0xb8ac98, coatMid: 0x7a6e5e, skin: 0x8a6e58, head: "tonsure", gear: "candle", robe: true },
+  // the necromancer's bones: their own bone colour, not the ash grey of the raised
+  skeleton: { coat: 0xcfc6ae, coatMid: 0x8a826e, skin: 0xd8d0b8, head: "skull", gear: "sword", bulk: 0.8, eyes: 0xff8a3a },
+  skeletonArcher: { coat: 0xcfc6ae, coatMid: 0x8a826e, skin: 0xd8d0b8, head: "skull", gear: "crossbow", bulk: 0.8, eyes: 0xff8a3a },
 };
 
 const MINION = { coat: PAL.minion, coatMid: PAL.minionMid, skin: 0x7a766e };
@@ -85,15 +88,18 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   if (e.kind === "mimic") return drawMimic(g, glow, e, w);
   if (e.kind === "abomination") return drawAbomination(g, glow, e, w);
   if (e.def.boss) return drawBoss(g, glow, e, w);
+  if (e.kind === "ghost" || e.kind === "wraith") return drawSpirit(g, glow, e, w);
   const look = LOOKS[e.kind] ?? LOOKS.halberdier!;
   const minion = e.team === "minion";
+  // servants keep their own colours (bone), the raised dead turn ash grey
+  const ash = minion && !e.def.servant;
   const { x, y } = e.pos;
   const size = (e.def.size ?? 1) * (e.mini ? 0.75 : 1);
   const face = minion ? (e.dir.x >= 0 ? 1 : -1) : w.player.pos.x >= x ? 1 : -1;
   const flash = e.flash > 0;
-  const coat = flash ? 0xffffff : minion ? MINION.coat : look.coat;
-  const coatMid = flash ? 0xffffff : minion ? MINION.coatMid : look.coatMid;
-  const skin = flash ? 0xffffff : minion ? MINION.skin : look.skin;
+  const coat = flash ? 0xffffff : ash ? MINION.coat : look.coat;
+  const coatMid = flash ? 0xffffff : ash ? MINION.coatMid : look.coatMid;
+  const skin = flash ? 0xffffff : ash ? MINION.skin : look.skin;
   const s = size;
   // walking: the body bobs with each step and leans into the way it goes
   const mv = m?.moving ?? 0;
@@ -153,14 +159,19 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   }
   if (!look.robe) g.rect(x - 20 * s * bulk, top + 50 * s, 40 * s * bulk, 5 * s).fill(PAL.ink);
 
-  drawHead(g, glow, look.head, x + 2 * face * s + hunch * 1.2, top + 12 * s, s, face, skin, minion, flash, look);
+  drawHead(g, glow, look.head, x + 2 * face * s + hunch * 1.2, top + 12 * s, s, face, skin, ash, flash, look);
+  if (e.def.servant && !flash) {
+    // ribs through the rags
+    for (let i = 0; i < 4; i++) g.moveTo(x - 11 * s, top + (30 + i * 8) * s).lineTo(x + 11 * s, top + (30 + i * 8) * s).stroke({ width: 3, color: PAL.ink, alpha: 0.75 });
+    g.moveTo(x, top + 26 * s).lineTo(x, top + 62 * s).stroke({ width: 3, color: PAL.ink, alpha: 0.75 });
+  }
   drawGear(g, glow, look.gear, e, x, top, s, face, minion, w);
   if (look.shield) drawShield(g, e, x, top, s, minion);
   // the paviser carries his great shield until he plants it
   if (e.kind === "paviser" && !e.goal) drawPavise(g, e, x, top, s, minion);
   if (e.leader && !minion) drawLeaderMark(g, e, x + 2 * face * s + hunch * 1.2, top + 12 * s, s, face, look.head);
 
-  if (minion) {
+  if (ash) {
     glow.circle(x + 6 * face * s + hunch * 1.2, top + 12 * s, 8 * s).fill({ color: PAL.ember, alpha: 0.22 });
     glow.circle(x + 3 * face * s + hunch * 1.2, top + 11 * s, 2 * s).fill(PAL.ember);
     glow.circle(x + 9 * face * s + hunch * 1.2, top + 11 * s, 1.6 * s).fill(PAL.ember);
@@ -170,6 +181,7 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   }
   drawStatus(g, glow, e, x, top, s, w);
   if (e.lamplighter && !minion) drawTaper(g, glow, e, x, top, s, face, w);
+  drawServantMarks(g, glow, e, x, top, s, w);
 }
 
 function drawHead(g: Graphics, glow: Graphics, head: Head, hx: number, hy: number, s: number, face: number, skin: number, minion: boolean, flash: boolean, look: Look): void {
@@ -695,5 +707,62 @@ export function drawPlayer(g: Graphics, glow: Graphics, w: World, m?: Motion): v
       const k = (w.time * 1.4 + i / 3) % 1;
       glow.poly([x - 14 + i * 14, top + 30 + k * 50, x - 11 + i * 14, top + 38 + k * 50, x - 14 + i * 14, top + 42 + k * 50, x - 17 + i * 14, top + 38 + k * 50]).fill({ color: 0x8ab4ff, alpha: 0.8 * (1 - k) });
     }
+  }
+}
+
+// ------------------------------------------------------------------ the characters' own dead (necro.ts)
+/** The priest's fanatics carry a small flame over the head; the witch's hanged hang on her rope. */
+function drawServantMarks(g: Graphics, glow: Graphics, e: Unit, x: number, top: number, s: number, w: World): void {
+  if (e.team !== "minion") return;
+  if (e.zealot) {
+    const f = Math.sin(w.time * 9 + e.id) * 2;
+    glow.circle(x, top - 16 * s, 12 * s).fill({ color: 0xffb060, alpha: 0.18 });
+    glow.poly([x - 5 * s, top - 8 * s, x + f * 0.5, top - 26 * s + f, x + 5 * s, top - 8 * s]).fill({ color: 0xffc070, alpha: 0.9 });
+  }
+  if (e.hanged) {
+    // the noose and the rope back to her hand, slack while it hangs, taut while it flies
+    const p = w.player;
+    const nx = x;
+    const ny = top + 22 * s;
+    g.circle(nx, ny, 6 * s).stroke({ width: 3, color: 0x8a6a3a });
+    const mx = (nx + p.pos.x) / 2;
+    const my = (ny + p.pos.y - 40) / 2 + (e.thrown !== undefined ? 0 : 60);
+    g.moveTo(nx, ny).quadraticCurveTo(mx, my, p.pos.x, p.pos.y - 40).stroke({ width: 2, color: 0x8a6a3a, alpha: e.thrown !== undefined ? 0.9 : 0.4 });
+  }
+}
+
+/** The lich's ghosts and wraiths: a pale hooded shape with no feet, its tail curling over the floor. */
+function drawSpirit(g: Graphics, glow: Graphics, e: Unit, w: World): void {
+  const wraith = e.kind === "wraith";
+  const s = e.def.size ?? 1;
+  const { x } = e.pos;
+  const hover = Math.sin(w.time * 3 + e.id) * 5;
+  const y = e.pos.y - 8 + hover;
+  const face = e.dir.x >= 0 ? 1 : -1;
+  const flash = e.flash > 0;
+  const body = flash ? 0xffffff : wraith ? 0x2a3440 : 0xb8d0e0;
+  const edge = wraith ? 0x6a8aa8 : 0xe8f4ff;
+  const fade = e.lifetime < 6 ? 0.4 + 0.3 * Math.abs(Math.sin(w.time * 8)) : 1;
+  g.ellipse(x, e.pos.y + 16 * s, 20 * s, 6 * s).fill({ color: PAL.ink, alpha: 0.35 });
+  glow.circle(x, y - 30 * s, (wraith ? 46 : 34) * s).fill({ color: wraith ? 0x6a8aa8 : 0xb8e0ff, alpha: 0.1 * fade });
+  // the robe, narrowing into a wavering tail
+  const sway = Math.sin(w.time * 5 + e.id) * 8 * s;
+  const pts = [x - 16 * s, y - 50 * s, x + 16 * s, y - 50 * s, x + 20 * s, y - 14 * s, x + 8 * s + sway, y + 4 * s, x + sway * 1.6, y + 18 * s, x - 8 * s + sway, y + 2 * s, x - 20 * s, y - 14 * s];
+  g.poly(pts).fill({ color: body, alpha: (wraith ? 0.85 : 0.55) * fade }).stroke({ width: 3, color: edge, alpha: 0.6 * fade });
+  if (wraith) {
+    // tattered hem
+    for (let i = 0; i < 4; i++) g.moveTo(x - 16 * s + i * 10 * s, y - 14 * s).lineTo(x - 18 * s + i * 10 * s + sway * 0.5, y + 2 * s).stroke({ width: 3, color: PAL.ink, alpha: 0.6 * fade });
+  }
+  // the hood and the dark inside it
+  const hx = x + 2 * face * s;
+  const hy = y - 58 * s;
+  g.poly([hx - 15 * s, hy + 14 * s, hx - 11 * s, hy - 8 * s, hx, hy - 18 * s, hx + 11 * s, hy - 8 * s, hx + 15 * s, hy + 14 * s]).fill({ color: body, alpha: 0.8 * fade }).stroke({ width: 3, color: edge, alpha: 0.7 * fade });
+  g.ellipse(hx + 3 * face * s, hy + 3 * s, 8 * s, 9 * s).fill({ color: PAL.ink, alpha: 0.9 * fade });
+  const eye = wraith ? 0x9ad8ff : 0xe8f8ff;
+  glow.circle(hx + 1 * face * s, hy + 2 * s, 2.2 * s).fill(eye);
+  glow.circle(hx + 7 * face * s, hy + 2 * s, 1.8 * s).fill(eye);
+  // reaching hands when it strikes
+  if (e.state === "windup" || e.state === "strike") {
+    g.moveTo(x + 10 * face * s, y - 34 * s).lineTo(x + 34 * face * s + e.dir.x * 10, y - 30 * s + e.dir.y * 10).stroke({ width: 5, color: body, alpha: 0.8 * fade, cap: "round" });
   }
 }

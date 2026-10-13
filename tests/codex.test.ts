@@ -19,7 +19,8 @@ const death = (kind: UnitKind, team: "enemy" | "minion" = "enemy"): GameEvent =>
 test("the chapters hold everything the game has, each thing once", () => {
   const all = CODEX_SECTIONS.flatMap((s) => s.entries);
   assert.equal(new Set(all).size, all.length);
-  const units = Object.keys(UNITS);
+  // the necromancers' own servants (skeletons, ghosts) are never met as enemies
+  const units = (Object.keys(UNITS) as UnitKind[]).filter((k) => !UNITS[k].servant);
   assert.equal(CODEX_SECTIONS[0].entries.length + CODEX_SECTIONS[1].entries.length, units.length);
   for (const id of Object.keys(WEAPONS)) assert.ok(all.includes(id), id);
   for (const id of Object.keys(ITEMS)) assert.ok(all.includes(id), id);

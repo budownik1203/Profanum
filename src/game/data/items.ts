@@ -24,9 +24,9 @@ export type Challenge = "raise20" | "beatSlums" | "kills250" | "reachMonastery" 
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   grabarz: { id: "grabarz", weapon: "pistol", hearts: 3, stats: { raiseCost: 1 }, unlock: null },
-  nekromanta: { id: "nekromanta", weapon: "bonestaff", hearts: 3, stats: { minionLimit: 4 }, unlock: { challenge: "raise20", echo: 20 } },
+  nekromanta: { id: "nekromanta", weapon: "bonestaff", hearts: 3, stats: { minionLimit: 6 }, unlock: { challenge: "raise20", echo: 20 } },
   lisz: { id: "lisz", weapon: "howler", hearts: 2, stats: { lightDamageMul: 0.92, burnDelayMul: 2 }, unlock: { challenge: "beatSlums", echo: 35 } },
-  medyk: { id: "medyk", weapon: "blunderbuss", hearts: 3, stats: { infect: true }, unlock: { challenge: "kills250", echo: 30 } },
+  medyk: { id: "medyk", weapon: "blunderbuss", hearts: 3, stats: {}, unlock: { challenge: "kills250", echo: 30 } },
   kaplan: { id: "kaplan", weapon: "arquebus", hearts: 3, stats: { relicChargeBonus: 1 }, relic: "monstrance", unlock: { challenge: "reachMonastery", echo: 45 } },
   wiedzma: { id: "wiedzma", weapon: "petronel", hearts: 3, stats: {}, unlock: { challenge: "beatCathedral", echo: 60 } },
 };

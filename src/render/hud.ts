@@ -174,6 +174,9 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
   if (list.length > perRow * 2) tx.text(`+${list.length - perRow * 2}`, rx + 2, ry - 46 - 2 * 42 + 10, { size: 16, color: PAL.hudDim });
   const minions = boundMinions(w);
   tx.text(`${t("hud.minions")}: ${minions}/${p.stats.minionLimit}`, rx + 22, ry + 82, { size: 22, color: minions > 0 ? PAL.ember : PAL.hudText });
+  if (p.character === "medyk") {
+    tx.text(t("hud.organs", { n: p.organs ?? 0, m: CONFIG.necro.abominationOrgans }), rx + 200, ry + 82, { size: 20, color: (p.organs ?? 0) >= CONFIG.necro.abominationOrgans ? PAL.ember : PAL.hudText });
+  }
   if (p.character === "wiedzma") {
     const cd = p.specialCooldown;
     tx.text(cd > 0 ? `${t("hud.rope")} ${cd.toFixed(1)}s` : t("hud.rope"), rx + 200, ry + 82, { size: 20, color: cd > 0 ? PAL.hudDim : PAL.hudText });

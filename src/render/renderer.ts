@@ -473,6 +473,28 @@ export class GameRenderer {
           this.floatText(e.pos, t("float.ritual"), 0xc88aff, 30, 2);
           this.addShake(10);
           break;
+        case "harvest":
+          // the plague doctor's knife: a spray of blood, the organs into the jar (or the abomination)
+          for (let i = 0; i < 18; i++) this.spawn(e.pos, rnd(-140, 140), rnd(-200, 20), rnd(0.3, 0.7), rnd(2, 5), PAL.blood, "spark");
+          this.floatText(e.pos, e.fed ? t("float.fed") : e.organs === 1 ? t("float.organ") : t("float.organs", { n: e.organs }), 0xc84a3a, 24, 1.1);
+          break;
+        case "scream":
+          for (let i = 0; i < 28; i++) {
+            const a = (i / 28) * Math.PI * 2;
+            this.spawn(e.pos, Math.cos(a) * 320, Math.sin(a) * 320, rnd(0.3, 0.5), rnd(8, 14), 0x9ab8d0, "mist");
+          }
+          this.addShake(5);
+          break;
+        case "hangedThrow":
+          for (let i = 0; i < 10; i++) this.spawn(e.from, rnd(-80, 80), rnd(-120, 0), rnd(0.2, 0.4), rnd(6, 10), PAL.smoke, "smoke");
+          break;
+        case "hangedRecall":
+          this.floatText(e.pos, t("float.recall"), 0x8a6a3a, 22, 0.9);
+          break;
+        case "hangedLand":
+          for (let i = 0; i < 22; i++) this.spawn(e.pos, rnd(-220, 220), rnd(-220, 220), rnd(0.3, 0.6), rnd(8, 16), PAL.smoke, "smoke");
+          this.addShake(9);
+          break;
         case "abomination":
           for (let i = 0; i < 40; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-200, 40), rnd(0.5, 1.1), rnd(12, 28), PAL.ink, "mist");
           this.floatText(e.pos, t("float.abomination"), PAL.ember, 32, 1.6);

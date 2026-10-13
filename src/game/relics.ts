@@ -2,6 +2,7 @@
  * Active relics (F, charged by clearing rooms) and the witch's rope (C).
  */
 import { CONFIG } from "./config.js";
+import { throwHanged } from "./necro.js";
 import { type Vec, add, dist, norm, scale, sub, vec } from "./math.js";
 import { RELICS } from "./data/items.js";
 import type { World } from "./world.js";
@@ -117,7 +118,9 @@ export function useRelic(w: World, aim: Vec): void {
 export function useSpecial(w: World, aim: Vec): void {
   const p = w.player;
   if (p.character !== "wiedzma" || p.specialCooldown > 0) return;
-  if (pullNearest(w, aim)) p.specialCooldown = CONFIG.rope.cooldown;
+  // her hanged first: throw the nearest at the aim, or pull them all back; else the old rope
+  if (throwHanged(w, aim)) p.specialCooldown = CONFIG.rope.hangedCooldown;
+  else if (pullNearest(w, aim)) p.specialCooldown = CONFIG.rope.cooldown;
 }
 
 function pullNearest(w: World, aim: Vec): boolean {

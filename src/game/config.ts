@@ -93,6 +93,13 @@ export const CONFIG = {
     abominationCorpses: 3, // corpses stitched into an abomination
     abominationCost: 3, // souls
     abominationRange: 170,
+    // the necromancer's skeletons, the plague doctor's organs (necro.ts)
+    skeletonLifetime: 18,
+    abominationOrgans: 3,
+    abominationBaseHp: 30,
+    abominationMaxSize: 10,
+    organHp: 8,
+    zealotLightMul: 1.3, // the priest's fanatics hit harder in light
   },
 
   /** Darkness, light and the ambush that opens a fight (design doc: "Mrok i zasadzka"). */
@@ -166,5 +173,5 @@ export const CONFIG = {
   curses: { heavySpeedMul: 0.85, slowReloadMul: 1.3 },
 
   /** The witch's rope (and the hangman's rope relic). */
-  rope: { range: 520, cooldown: 4, stun: 1 },
+  rope: { range: 520, cooldown: 4, stun: 1, hangedReach: 260, hangedCooldown: 2.2, landRadius: 95, landDamage: 7 },
 } as const;

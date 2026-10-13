@@ -18,14 +18,13 @@ import {
 import { Run } from "../src/game/run.js";
 import { CHARACTERS, CHARACTER_ORDER, STARTING_POOL, UNLOCKABLES } from "../src/game/data/items.js";
 import { WEAPONS } from "../src/game/data/weapons.js";
-import { World, idleInput } from "../src/game/world.js";
+import { idleInput } from "../src/game/world.js";
 import { makePlayer } from "../src/game/stats.js";
-import { damageUnit } from "../src/game/combat.js";
 import { buildHub } from "../src/game/hub.js";
 import { nextSkullLine, SKULL_STORY } from "../src/narrator.js";
-import { makeRng, vec } from "../src/game/math.js";
+import { vec } from "../src/game/math.js";
 import { BOSS_KINDS } from "../src/game/data/units.js";
-import { DT, freeze, step } from "./helpers.js";
+import { DT, step } from "./helpers.js";
 
 test("the crypt's records survive a reload, and a broken save starts afresh", () => {
   const store = makeStore();
@@ -116,19 +115,6 @@ test("each of the six starts with its own weapon, hearts and gift", () => {
   // a starting occult weapon is free
   const lich = makePlayer("lisz", vec());
   assert.equal(WEAPONS[lich.weapons[0].id].kind, "occult");
-});
-
-test("the plague doctor's infected rise as his minions", () => {
-  const w = new World(makeRng(3));
-  w.player = makePlayer("medyk", vec(400, 500));
-  w.alarm = true;
-  const g = w.spawn("arquebusier", vec(600, 500));
-  freeze(g);
-  damageUnit(w, g, 1, vec(1, 0), { fromPlayer: true, side: "minion" });
-  assert.ok(g.st.infected, "infected by the hit");
-  damageUnit(w, g, 999, vec(1, 0), { fromPlayer: true, side: "minion" });
-  step(w, idleInput(), DT);
-  assert.ok(w.minions.some((m) => m.kind === "arquebusier"), "risen as a minion");
 });
 
 test("the crypt has its sarcophagi, the altar, the skull, the ledger and the stairs", () => {

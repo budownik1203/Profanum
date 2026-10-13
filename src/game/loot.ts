@@ -13,6 +13,7 @@ import type { Chest, ChestTier, Corpse, Interactable, Pickup, PickupKind, Ritual
 import type { World } from "./world.js";
 import { nextId, pick, randInt } from "./shared.js";
 import { giveItem, giveRelic, giveWeapon, maxAmmo } from "./stats.js";
+import { abominationOf, harvest, raiseAs, stitchFromOrgans, styleOf } from "./necro.js";
 
 // ------------------------------------------------------------------ raising the dead
 /** The corpse E would raise right now, if any. */
@@ -38,8 +39,14 @@ export function boundMinions(w: World): number {
 export function tryRaise(w: World): boolean {
   const c = raisableCorpse(w);
   if (!c) return false;
+  // the plague doctor raises nobody: he takes the organs out (free, no limit)
+  if (styleOf(w) === "organs") {
+    harvest(w, c);
+    return true;
+  }
   const stats = w.player.stats;
-  if (boundMinions(w) >= stats.minionLimit) {
+  const room = stats.minionLimit - boundMinions(w);
+  if (room <= 0) {
     w.events.push({ type: "raiseFail", pos: { ...c.pos }, reason: "limit" });
     return true;
   }
@@ -48,7 +55,8 @@ export function tryRaise(w: World): boolean {
     return true;
   }
   w.player.souls -= stats.raiseCost;
-  raiseCorpse(w, c);
+  w.corpses = w.corpses.filter((x) => x !== c);
+  for (const u of raiseAs(w, c, room)) w.events.push({ type: "raise", pos: { ...u.pos }, kind: u.kind, unit: u.id, free: false });
   return true;
 }
 
@@ -71,12 +79,25 @@ export function autoRaise(w: World, dead: Unit, mini: boolean): void {
     w.events.push({ type: "raise", pos: { ...c.pos }, kind: c.kind, unit: u.id, free: true });
     return;
   }
-  if (boundMinions(w) >= w.player.stats.minionLimit) return;
-  raiseCorpse(w, c, true);
+  const room = w.player.stats.minionLimit - boundMinions(w);
+  if (room <= 0) return;
+  // the infected rise each character's way (bones, spirits, fanatics...); the plague doctor's knife
+  // isn't needed for that, so his infected rise as they were
+  if (styleOf(w) === "organs") {
+    raiseCorpse(w, c, true);
+    return;
+  }
+  w.corpses = w.corpses.filter((x) => x !== c);
+  for (const u of raiseAs(w, c, room)) w.events.push({ type: "raise", pos: { ...u.pos }, kind: u.kind, unit: u.id, free: true });
 }
 
-/** Stitch the bodies lying around into one abomination (design doc: Abominacje). */
+/** Only the plague doctor stitches an abomination now, from the organs in his jar (necro.ts). */
 function tryAbomination(w: World): boolean {
+  return styleOf(w) === "organs" && stitchFromOrgans(w);
+}
+
+/** The old way: bodies lying around stitched into one abomination (kept for reference, unused). */
+export function stitchFromCorpses(w: World): boolean {
   const n = CONFIG.necro;
   if (w.units.some((u) => u.alive && u.kind === "abomination")) return false;
   const near = w.corpses.filter((c) => dist(c.pos, w.player.pos) < n.abominationRange && !c.big).slice(0, 6);
@@ -352,11 +373,8 @@ export function interactTarget(w: World): InteractTarget | null {
   }
   const corpse = raisableCorpse(w);
   if (corpse) consider({ kind: "corpse", corpse, pos: corpse.pos }, dist(corpse.pos, p.pos) + 0.1, CONFIG.necro.raiseRange);
-  if (!best) {
-    const n = CONFIG.necro;
-    const near = w.corpses.filter((c) => dist(c.pos, p.pos) < n.abominationRange && !c.big);
-    if (near.length >= n.abominationCorpses && !w.units.some((u) => u.alive && u.kind === "abomination")) best = { kind: "abomination", pos: { ...p.pos } };
-  }
+  // the plague doctor with a full jar and no abomination yet: stitch one
+  if (!best && styleOf(w) === "organs" && (p.organs ?? 0) >= CONFIG.necro.abominationOrgans && !abominationOf(w)) best = { kind: "abomination", pos: { ...p.pos } };
   return best;
 }
 

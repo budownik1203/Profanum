@@ -654,6 +654,19 @@ export class GameAudio {
         case "synergy":
           this.dread(0, 0.7);
           break;
+        case "harvest":
+          if (this.allow("harvest", 0.12)) this.flesh(at(e.pos)[0], 0.5, false);
+          break;
+        case "scream":
+          this.roar(at(e.pos)[0], 0.35);
+          break;
+        case "hangedThrow":
+        case "hangedRecall":
+          if (this.allow("rope", 0.1)) this.whoosh(at(e.type === "hangedThrow" ? e.from : e.pos)[0], 0.6);
+          break;
+        case "hangedLand":
+          this.boom(at(e.pos)[0], 0.4, 0.15);
+          break;
         case "abomination":
           this.flesh(at(e.pos)[0], 0.9, true);
           this.roar(at(e.pos)[0], 0.4);

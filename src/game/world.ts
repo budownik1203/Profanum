@@ -674,7 +674,17 @@ export class World {
       const min = u.radius + o.radius;
       if (sd > 0 && sd < min) u.pos = add(u.pos, scale(norm(sep), (min - sd) / 2));
     }
-    u.pos = this.collideWorld(u.pos, u.radius);
+    // ghosts pass through pews and pillars: only the walls hold them
+    u.pos = u.def.phase ? this.collideWalls(u.pos, u.radius) : this.collideWorld(u.pos, u.radius);
+  }
+
+  /** Keep a circle inside the room's walls (covers don't count). */
+  collideWalls(pos: Vec, radius: number): Vec {
+    const wall = CONFIG.room.wall;
+    return {
+      x: clamp(pos.x, this.room.x + wall + radius, this.room.x + this.room.w - wall - radius),
+      y: clamp(pos.y, this.room.y + wall + radius, this.room.y + this.room.h - wall - radius),
+    };
   }
 
   /** Keep a circle inside the room and outside every cover (toppled or not). */
