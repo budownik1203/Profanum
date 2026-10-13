@@ -417,7 +417,7 @@ async function boot(): Promise<void> {
     if (st === "owned") footer = meta.selected === id ? t("hub.chosen", { name: t(`char.${id}`) }) : t("hub.select");
     else if (st === "buyable") footer = meta.echo >= def.unlock!.echo ? t("hub.buy", { n: def.unlock!.echo }) : t("hub.need", { n: def.unlock!.echo });
     else footer = t("hub.locked", { challenge: t(`challenge.${def.unlock!.challenge}`) });
-    screens.panel(st === "sealed" ? "???" : t(`char.${id}`), st === "sealed" ? [t(`challenge.${def.unlock!.challenge}`)] : lines, footer, st === "owned" ? 0xf4e2c8 : 0x8a8070);
+    screens.panel(st === "sealed" ? "???" : t(`char.${id}`), st === "sealed" ? [t("hub.sealed")] : lines, footer, st === "owned" ? 0xf4e2c8 : 0x8a8070);
   };
 
   // ---------------------------------------------------------------- simulation events → presentation
@@ -754,7 +754,8 @@ async function boot(): Promise<void> {
       mode: mode === "hub" ? "hub" : "run",
       narrator: narrator.text,
       narratorAlpha: Math.min(1, narrator.time / 0.5),
-      banner: banner ? { text: banner.text, sub: banner.sub, alpha: Math.min(1, banner.time / 0.6) } : null,
+      // a banner would show through an open menu, right behind its title
+      banner: banner && overlay === null ? { text: banner.text, sub: banner.sub, alpha: Math.min(1, banner.time / 0.6) } : null,
       echo: mode === "hub" ? meta.echo : undefined,
       started: true,
     });

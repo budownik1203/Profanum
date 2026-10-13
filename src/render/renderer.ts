@@ -462,10 +462,18 @@ export class GameRenderer {
     // camera follows the player, leaning a little towards the aim point
     const p = world.player;
     const target = { x: p.pos.x + (aim.x - p.pos.x) * 0.18, y: p.pos.y + (aim.y - p.pos.y) * 0.18 };
+    // in a boss fight the camera also leans towards the boss, so he doesn't stand under the HUD
+    const boss = world.units.find((u) => u.def.boss && u.alive);
+    if (boss) {
+      target.x += (boss.pos.x - p.pos.x) * 0.15;
+      target.y += (boss.pos.y - p.pos.y) * 0.2;
+    }
     this.cam.x += (target.x - this.cam.x) * Math.min(1, dt * 8);
     this.cam.y += (target.y - this.cam.y) * Math.min(1, dt * 8);
-    const cx = clampCam(this.cam.x, world.room.w, VIEW_W);
-    const cy = clampCam(this.cam.y, world.room.h, VIEW_H);
+    const cx = clampCam(this.cam.x, world.room.w, VIEW_W, 0, 0);
+    // the top and bottom edges of a room may slide out from under the HUD (the boss bar, the
+    // weapon and relic panels), so a boss by the far wall is never hidden behind them
+    const cy = clampCam(this.cam.y, world.room.h, VIEW_H, CAM_PAD_TOP, CAM_PAD_BOTTOM);
     this.shake = Math.max(0, this.shake - dt * 60);
     const sx = (Math.random() - 0.5) * this.shake;
     const sy = (Math.random() - 0.5) * this.shake;
@@ -591,8 +599,14 @@ export class GameRenderer {
         fy = hang.y + (l.pos.y - hang.y) * tt * tt;
         g.ellipse(l.pos.x, l.pos.y, 60 + 40 * tt, 18 + 12 * tt).fill({ color: PAL.ink, alpha: 0.25 + 0.4 * tt });
       } else {
-        g.moveTo(hang.x, fy - 26).lineTo(hang.x, fy - 420).stroke({ width: 7, color: PAL.ink });
-        g.moveTo(hang.x, fy - 26).lineTo(hang.x, fy - 420).stroke({ width: 3, color: PAL.iron });
+        // the chain rises into the dark of the vault and fades there, so it doesn't run through
+        // whoever stands behind the chandelier (a long hard line used to cut the bosses in half)
+        for (let k = 0; k < 5; k++) {
+          const a = 1 - k * 0.2;
+          const y0 = fy - 26 - k * 40;
+          g.moveTo(hang.x, y0).lineTo(hang.x, y0 - 40).stroke({ width: 7, color: PAL.ink, alpha: a * 0.8 });
+          g.moveTo(hang.x, y0).lineTo(hang.x, y0 - 40).stroke({ width: 3, color: PAL.iron, alpha: a });
+        }
       }
       const x = hang.x;
       const sway = l.falling === undefined ? Math.sin(world.time * 1.3 + l.id) * 2 : 0;
@@ -1081,9 +1095,15 @@ function rnd(a: number, b: number): number {
   return a + Math.random() * (b - a);
 }
 
-function clampCam(c: number, worldSize: number, view: number): number {
-  if (worldSize <= view) return worldSize / 2;
-  return Math.max(view / 2, Math.min(worldSize - view / 2, c));
+/** How far past the room's top and bottom edges the camera may look (the HUD bands). */
+const CAM_PAD_TOP = 100;
+const CAM_PAD_BOTTOM = 130;
+
+function clampCam(c: number, worldSize: number, view: number, padLo: number, padHi: number): number {
+  const lo = view / 2 - padLo;
+  const hi = worldSize - view / 2 + padHi;
+  if (lo >= hi) return (lo + hi) / 2;
+  return Math.max(lo, Math.min(hi, c));
 }
 
 /** A radial darkening around the screen edges, drawn once on a canvas. */

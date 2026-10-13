@@ -54,25 +54,31 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
     return;
   }
   // ---------------------------------------------------------------- hearts, armour, purse
-  frame(g, 24, 20, 360, 112);
+  // hearts and armour share one row; past ten they draw closer and smaller instead of running
+  // out of the frame and under the boss's bar
   const hearts = p.maxHalves / 2;
+  const icons = hearts + p.armor;
+  const step = icons > 10 ? Math.max(18, 440 / icons) : 44;
+  const hs = 0.85 * Math.min(1, step / 40);
+  frame(g, 24, 20, Math.max(360, 56 + (icons - 1) * step + 40), 112);
   for (let i = 0; i < hearts; i++) {
-    const hx = 56 + i * 44;
+    const hx = 56 + i * step;
     const hy = 50;
-    heartShape(g, hx, hy, 0.85, PAL.heartEmpty);
+    heartShape(g, hx, hy, hs, PAL.heartEmpty);
     const filled = p.halves - i * 2;
-    if (filled >= 2) heartShape(g, hx, hy, 0.85);
+    if (filled >= 2) heartShape(g, hx, hy, hs);
     else if (filled === 1) {
       // half a heart: the left half filled
-      const s = 0.85;
+      const s = hs;
       g.poly([hx, hy + 16 * s, hx - 18 * s, hy - 2 * s, hx - 18 * s, hy - 10 * s, hx - 10 * s, hy - 16 * s, hx, hy - 9 * s]).fill(PAL.heart);
       g.poly([hx, hy + 16 * s, hx - 18 * s, hy - 2 * s, hx - 18 * s, hy - 10 * s, hx - 10 * s, hy - 16 * s, hx, hy - 9 * s, hx + 10 * s, hy - 16 * s, hx + 18 * s, hy - 10 * s, hx + 18 * s, hy - 2 * s]).stroke({ width: 3, color: PAL.ink });
     }
   }
   for (let i = 0; i < p.armor; i++) {
-    const ax = 56 + (hearts + i) * 44;
-    g.poly([ax - 13, 38, ax + 13, 38, ax + 11, 64, ax - 11, 64]).fill(0xcfc4a8).stroke({ width: 3, color: PAL.ink });
-    for (let k = 0; k < 3; k++) g.moveTo(ax - 9, 45 + k * 6).lineTo(ax + 9, 45 + k * 6).stroke({ width: 2, color: 0x6a6050 });
+    const ax = 56 + (hearts + i) * step;
+    const k = hs / 0.85;
+    g.poly([ax - 13 * k, 50 - 12 * k, ax + 13 * k, 50 - 12 * k, ax + 11 * k, 50 + 14 * k, ax - 11 * k, 50 + 14 * k]).fill(0xcfc4a8).stroke({ width: 3, color: PAL.ink });
+    for (let j = 0; j < 3; j++) g.moveTo(ax - 9 * k, 50 + (-5 + j * 6) * k).lineTo(ax + 9 * k, 50 + (-5 + j * 6) * k).stroke({ width: 2, color: 0x6a6050 });
   }
   // souls, gold, keys
   const row = 100;
@@ -190,7 +196,8 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
     g.rect(bx, by2 + 4, bw, 14).fill(0x2a1210);
     g.rect(bx, by2 + 4, bw * Math.max(0, boss.hp / boss.maxHp), 14).fill(PAL.heart);
     tx.text(t(`unit.${boss.kind}`), VIEW_W / 2, by2 - 28, { size: 26, font: "display", align: "center" }, 0.5, 0);
-    if (w.isLit(boss.pos, false)) tx.text("☀", bx + bw + 4, by2 - 6, { size: 20, color: 0xf4e2a8 });
+    // the boss stands in light (stronger there): a small sun inside the frame, by the name
+    if (w.isLit(boss.pos, false)) tx.text("☀", bx + bw - 4, by2 - 30, { size: 22, color: 0xf4e2a8, align: "right" }, 1, 0);
   }
 
   // ---------------------------------------------------------------- banners and the narrator
