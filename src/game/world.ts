@@ -453,8 +453,20 @@ export class World {
     if (this.doorsOpen) {
       for (const d of this.usableDoors) {
         const c = this.doorCenter(d.side);
-        const along = d.side === "N" || d.side === "S" ? Math.abs(pos.x - c.x) : Math.abs(pos.y - c.y);
-        if (along > half - r) continue;
+        const vertical = d.side === "N" || d.side === "S";
+        const along = vertical ? Math.abs(pos.x - c.x) : Math.abs(pos.y - c.y);
+        // corner slide: brushing a jamb while pushing into the wall eases him toward the opening
+        const excess = along - (half - r);
+        if (excess > 0 && excess <= r) {
+          const depth =
+            d.side === "N" ? wall + r - pos.y : d.side === "S" ? pos.y - (h - wall - r) : d.side === "W" ? wall + r - pos.x : pos.x - (w - wall - r);
+          if (depth > 0) {
+            const nudge = Math.min(excess, depth);
+            if (vertical) pos = { x: pos.x - Math.sign(pos.x - c.x) * nudge, y: pos.y };
+            else pos = { x: pos.x, y: pos.y - Math.sign(pos.y - c.y) * nudge };
+          }
+        }
+        if ((vertical ? Math.abs(pos.x - c.x) : Math.abs(pos.y - c.y)) > half - r) continue;
         if (d.side === "N") minY = -r * 2;
         if (d.side === "S") maxY = h + r * 2;
         if (d.side === "W") minX = -r * 2;

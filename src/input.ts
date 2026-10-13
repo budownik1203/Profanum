@@ -13,6 +13,10 @@ export class Input {
   private keys = new Set<string>();
   private pressed = new Set<string>();
   private mouseDown = false;
+  /** The left button is held right now (without this frame's one-shot click). */
+  get mouseHeld(): boolean {
+    return this.mouseDown;
+  }
   private wheel = 0;
   /** Mouse position in screen (canvas CSS) pixels. */
   mouse: Vec = { x: 0, y: 0 };
@@ -71,7 +75,7 @@ export class Input {
     return {
       move: { x: k("KeyD") - k("KeyA") + k("ArrowRight") - k("ArrowLeft"), y: k("KeyS") - k("KeyW") + k("ArrowDown") - k("ArrowUp") },
       aim: aimWorld,
-      shoot: this.mouseDown,
+      shoot: this.mouseDown || this.pressed.has("Mouse0"),
       dodge: this.pressed.has("Mouse2") || this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight"),
       reload: this.pressed.has("KeyR"),
       flip: this.pressed.has("Space"),

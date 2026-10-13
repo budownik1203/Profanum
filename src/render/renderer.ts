@@ -38,6 +38,9 @@ interface Floater {
   vy: number;
   /** A line of words (not a damage number): these stack instead of overlapping. */
   big?: boolean;
+  /** The unit this line follows (its id), e.g. "Z ukrycia!"; fy = its y last frame. */
+  follow?: number;
+  fy?: number;
 }
 
 export interface Prompt {
@@ -122,7 +125,7 @@ export class GameRenderer {
   /** Darkest-Dungeon film: a little less colour, a little more contrast, and grain (design doc: Postprocess). */
   setFilm(on: boolean): void {
     if (!on) {
-      this.scene.filters = null;
+      this.scene.filters = [];
       this.grain = null;
       return;
     }
@@ -180,7 +183,7 @@ export class GameRenderer {
   }
 
   /** A short line of text rising from a point in the world. */
-  floatText(pos: Vec, text: string, color: number, size = 30, life = 1.1): void {
+  floatText(pos: Vec, text: string, color: number, size = 30, life = 1.1, follow?: number): void {
     // lines born in the same place stack upwards instead of printing over each other
     // (an item's name and "unique" or "synergy" when it is picked up)
     let y = pos.y - 70;
@@ -189,7 +192,7 @@ export class GameRenderer {
       if (!clash) break;
       y = clash.y - (clash.size + size) * 0.65;
     }
-    this.floaters.push({ x: pos.x, y, text, color, size, life, max: life, vy: -40, big: true });
+    this.floaters.push({ x: pos.x, y, text, color, size, life, max: life, vy: -40, big: true, follow });
   }
 
   addShake(v: number): void {
@@ -319,7 +322,7 @@ export class GameRenderer {
           break;
         case "ambushOut":
           for (let i = 0; i < 12; i++) this.spawn(e.pos, rnd(-180, 180), rnd(-200, 20), rnd(0.4, 0.8), rnd(4, 9), 0x5a4028, "splinter");
-          this.floatText(e.pos, t("float.ambushOut"), PAL.telegraph, 28, 1.1);
+          this.floatText(e.pos, t("float.ambushOut"), PAL.telegraph, 28, 1.1, e.unit);
           this.addShake(5);
           break;
         case "riteBroken":
@@ -896,6 +899,14 @@ export class GameRenderer {
     for (const f of this.floaters) {
       f.life -= dt;
       f.y += f.vy * dt;
+      if (f.follow !== undefined) {
+        const u = world.units.find((x) => x.id === f.follow);
+        if (u) {
+          f.y += u.pos.y - (f.fy ?? u.pos.y);
+          f.fy = u.pos.y;
+          f.x = u.pos.x;
+        }
+      }
       const a = Math.max(0, Math.min(1, f.life / 0.4));
       tx.text(f.text, f.x, f.y, { size: f.size, color: f.color, bold: true, stroke: true, align: "center" }, 0.5, 0.5, a);
     }

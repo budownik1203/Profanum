@@ -223,7 +223,7 @@ function shoot(w: World, u: Unit, dir: Vec, shot: ShotDef): void {
   } else {
     fan(w, muzzle, aim, shot.count, shot.spread, shot.speed, b);
   }
-  w.events.push({ type: "shot", pos: muzzle, dir: aim, side: u.team, fromPlayer: false });
+  w.events.push({ type: "shot", pos: muzzle, dir: aim, side: u.team, fromPlayer: false, unit: u.id });
   if (w.dark && !minion) w.addLight("flash", muzzle);
 }
 
@@ -980,7 +980,7 @@ const summoner: Behaviour = (w, u, t, dt) => {
     u.cooldown = 3.2;
     const shot = d.shot!;
     ring(w, u.pos, shot.count, shot.speed, w.rng() * Math.PI, { side: u.team, radius: shot.radius, look: shot.look, damage: u.team === "minion" ? 3 : CONFIG.hitOnMinion, halves: 1, life: shot.life ?? 5 });
-    w.events.push({ type: "shot", pos: { ...u.pos }, dir: vec(1, 0), side: u.team, fromPlayer: false });
+    w.events.push({ type: "shot", pos: { ...u.pos }, dir: vec(1, 0), side: u.team, fromPlayer: false, unit: u.id });
   }
   return keepRange(w, u, t, dt);
 };
