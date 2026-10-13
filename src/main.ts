@@ -620,11 +620,12 @@ async function boot(): Promise<void> {
     const dt = Math.min(0.1, ticker.deltaMS / 1000);
     time += dt;
     const mouse = view.toView(input.mouse);
-    const clicked = input.wasPressed("Mouse0");
-    const up = input.wasPressed("KeyW") || input.wasPressed("ArrowUp");
-    const down = input.wasPressed("KeyS") || input.wasPressed("ArrowDown");
-    const accept = input.wasPressed("Enter") || input.wasPressed("Space") || input.wasPressed("KeyE");
-    const esc = input.wasPressed("Escape");
+    let clicked = input.wasPressed("Mouse0");
+    let up = input.wasPressed("KeyW") || input.wasPressed("ArrowUp");
+    let down = input.wasPressed("KeyS") || input.wasPressed("ArrowDown");
+    let accept = input.wasPressed("Enter") || input.wasPressed("Space") || input.wasPressed("KeyE");
+    let esc = input.wasPressed("Escape");
+    const overlayAtStart = overlay;
     narrator.update(dt);
     audio.update(musicState(), overlay !== null);
     if (banner) {
@@ -734,6 +735,9 @@ async function boot(): Promise<void> {
         if (steps === MAX_STEPS) acc = 0;
       }
     }
+    // a menu opened this frame must not see the key that opened it (Esc would close the pause
+    // menu at once, E would close the ledger or buy at the altar)
+    if (overlay !== overlayAtStart) clicked = up = down = accept = esc = false;
     if (mode === "run" && run && run.over && overlay === null) {
       endTimer += dt;
       if (endTimer > (run.victory ? 4 : 2.5)) endRun();
