@@ -36,6 +36,8 @@ interface Floater {
   life: number;
   max: number;
   vy: number;
+  /** A line of words (not a damage number): these stack instead of overlapping. */
+  big?: boolean;
 }
 
 export interface Prompt {
@@ -179,7 +181,15 @@ export class GameRenderer {
 
   /** A short line of text rising from a point in the world. */
   floatText(pos: Vec, text: string, color: number, size = 30, life = 1.1): void {
-    this.floaters.push({ x: pos.x, y: pos.y - 70, text, color, size, life, max: life, vy: -40 });
+    // lines born in the same place stack upwards instead of printing over each other
+    // (an item's name and "unique" or "synergy" when it is picked up)
+    let y = pos.y - 70;
+    for (let tries = 0; tries < 6; tries++) {
+      const clash = this.floaters.find((f) => f.big && Math.abs(f.x - pos.x) < 220 && Math.abs(f.y - y) < (f.size + size) * 0.6);
+      if (!clash) break;
+      y = clash.y - (clash.size + size) * 0.65;
+    }
+    this.floaters.push({ x: pos.x, y, text, color, size, life, max: life, vy: -40, big: true });
   }
 
   addShake(v: number): void {

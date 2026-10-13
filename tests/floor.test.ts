@@ -17,9 +17,8 @@ const dirOf: Record<Side, [number, number]> = { N: [0, -1], S: [0, 1], W: [-1, 0
 /** Walk the player straight out through the given door of the current room. */
 function walkOut(f: Floor, side: Side): GameEvent[] {
   const w = f.world;
-  const c = w.doorCenter(side);
-  // line up with the doorway first
-  w.player.pos = side === "N" || side === "S" ? vec(c.x, w.player.pos.y) : vec(w.player.pos.x, c.y);
+  // stand just inside the doorway first (it may open off the middle of the wall, past a pillar)
+  w.player.pos = w.arrivalPoint(side);
   const [dx, dy] = dirOf[side];
   const all: GameEvent[] = [];
   for (let t = 0; t < 6; t += DT) {

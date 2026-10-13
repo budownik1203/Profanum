@@ -209,11 +209,12 @@ export function drawFloor(g: Graphics, w: World, doors: Door[]): void {
   const half = CONFIG.room.door / 2;
   for (const d of doors) {
     if (d.secret) continue;
+    const c = w.doorCenter(d.side);
     const r =
-      d.side === "N" ? { x: W / 2 - half, y: 0, w: half * 2, h: wall + 4 }
-      : d.side === "S" ? { x: W / 2 - half, y: H - wall - 4, w: half * 2, h: wall + 4 }
-      : d.side === "W" ? { x: 0, y: H / 2 - half, w: wall + 4, h: half * 2 }
-      : { x: W - wall - 4, y: H / 2 - half, w: wall + 4, h: half * 2 };
+      d.side === "N" ? { x: c.x - half, y: 0, w: half * 2, h: wall + 4 }
+      : d.side === "S" ? { x: c.x - half, y: H - wall - 4, w: half * 2, h: wall + 4 }
+      : d.side === "W" ? { x: 0, y: c.y - half, w: wall + 4, h: half * 2 }
+      : { x: W - wall - 4, y: c.y - half, w: wall + 4, h: half * 2 };
     g.rect(r.x, r.y, r.w, r.h).fill(0x070505);
     const horizontal = d.side === "N" || d.side === "S";
     if (horizontal) {
@@ -244,8 +245,9 @@ export function drawDoorsState(g: Graphics, w: World): void {
     const horizontal = d.side === "N" || d.side === "S";
     const base = d.side === "N" ? wall / 2 : d.side === "S" ? H - wall / 2 : d.side === "W" ? wall / 2 : W - wall / 2;
     for (let i = -half + 12; i <= half - 12; i += 22) {
-      if (horizontal) g.rect(W / 2 + i - 4, base - wall / 2, 8, wall).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
-      else g.rect(base - wall / 2, H / 2 + i - 4, wall, 8).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
+      const c = w.doorCenter(d.side);
+      if (horizontal) g.rect(c.x + i - 4, base - wall / 2, 8, wall).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
+      else g.rect(base - wall / 2, c.y + i - 4, wall, 8).fill(PAL.steel).stroke({ width: 3, color: PAL.ink });
     }
   }
   // cracked walls hiding the catacombs, once you know where to look

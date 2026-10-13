@@ -396,8 +396,8 @@ export class World {
     return !(this.alarm && this.enemies.length > 0);
   }
 
-  addDoor(side: Side, to: number, secret = false): Door {
-    const d: Door = { side, to, secret: secret || undefined };
+  addDoor(side: Side, to: number, secret = false, at = 0.5): Door {
+    const d: Door = { side, to, secret: secret || undefined, at: at === 0.5 ? undefined : at };
     this.doors.push(d);
     return d;
   }
@@ -410,7 +410,8 @@ export class World {
   /** Centre of a doorway on the wall line. */
   doorCenter(side: Side): Vec {
     const { w, h } = this.room;
-    return side === "N" ? vec(w / 2, 0) : side === "S" ? vec(w / 2, h) : side === "W" ? vec(0, h / 2) : vec(w, h / 2);
+    const at = this.doors.find((d) => d.side === side)?.at ?? 0.5;
+    return side === "N" ? vec(w * at, 0) : side === "S" ? vec(w * at, h) : side === "W" ? vec(0, h * at) : vec(w, h * at);
   }
 
   /** Where the necromancer stands right after walking in through this doorway. */
@@ -437,7 +438,8 @@ export class World {
     let minX = wall + r, maxX = w - wall - r, minY = wall + r, maxY = h - wall - r;
     if (this.doorsOpen) {
       for (const d of this.usableDoors) {
-        const along = d.side === "N" || d.side === "S" ? Math.abs(pos.x - w / 2) : Math.abs(pos.y - h / 2);
+        const c = this.doorCenter(d.side);
+        const along = d.side === "N" || d.side === "S" ? Math.abs(pos.x - c.x) : Math.abs(pos.y - c.y);
         if (along > half - r) continue;
         if (d.side === "N") minY = -r * 2;
         if (d.side === "S") maxY = h + r * 2;
@@ -447,8 +449,14 @@ export class World {
     }
     let p = { x: clamp(pos.x, minX, maxX), y: clamp(pos.y, minY, maxY) };
     // inside a doorway: stay between its jambs
-    if (p.y < wall + r || p.y > h - wall - r) p.x = clamp(p.x, w / 2 - half + r, w / 2 + half - r);
-    if (p.x < wall + r || p.x > w - wall - r) p.y = clamp(p.y, h / 2 - half + r, h / 2 + half - r);
+    if (p.y < wall + r || p.y > h - wall - r) {
+      const c = this.doorCenter(p.y < h / 2 ? "N" : "S");
+      p.x = clamp(p.x, c.x - half + r, c.x + half - r);
+    }
+    if (p.x < wall + r || p.x > w - wall - r) {
+      const c = this.doorCenter(p.x < w / 2 ? "W" : "E");
+      p.y = clamp(p.y, c.y - half + r, c.y + half - r);
+    }
     for (const c of this.solidCovers) if (circleHitsRect(p, r, c)) p = pushOutOfRect(p, r, c);
     for (const ch of this.chests) if (!ch.opened && !ch.broken && dist(p, ch.pos) < r + 30) p = add(ch.pos, scale(norm(sub(p, ch.pos)), r + 30));
     return p;

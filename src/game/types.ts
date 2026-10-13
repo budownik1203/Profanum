@@ -468,6 +468,8 @@ export interface Door {
   to: number;
   /** Hidden passage, opened by breaking the cracked wall. */
   secret?: boolean;
+  /** Where along its wall the doorway opens (0..1, the middle by default). */
+  at?: number;
 }
 
 // ------------------------------------------------------------------ events

@@ -309,11 +309,22 @@ export class Floor {
         applyTemplate(w, t, sec ?? this.depth, guards, rng, { elite: node.type === "miniboss", mirror: node.mirror });
       }
     }
+    // in ordinary rooms a doorway may open off the middle of its wall (special rooms keep theirs
+    // centred: their furniture is laid out around the axis); its own seed keeps the floor's draws
+    const offCentre = node.type === "combat" || node.type === "start" || node.type === "treasure" || node.type === "miniboss";
+    const doorRng = makeRng((node.gx + 50) * 7919 + (node.gy + 50) * 104729 + this.depth * 31 + node.id);
     for (const side of SIDES) {
       const to = node.doors[side];
       if (to === undefined) continue;
       const secret = !!node.secretDoors[side];
-      w.addDoor(side, to, secret);
+      let at = 0.5;
+      if (offCentre && !secret && doorRng() < 0.65) {
+        const length = side === "N" || side === "S" ? w.room.w : w.room.h;
+        const margin = Math.min(0.45, 300 / length);
+        const span = 0.5 - margin;
+        at = 0.5 + (doorRng() < 0.5 ? -1 : 1) * span * (0.45 + 0.55 * doorRng());
+      }
+      w.addDoor(side, to, secret, at);
       if (secret) {
         const c = w.doorCenter(side);
         w.addInteractable("secret", c, { hidden: true, hp: 3, side, radius: 90 });
