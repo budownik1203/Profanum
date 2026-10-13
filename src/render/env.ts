@@ -534,13 +534,9 @@ export function drawInteractable(g: Graphics, glow: Graphics, it: Interactable, 
       g.poly([x - 20 + swing, y + 4, x - 14 + swing, y - 36, x + 14 + swing, y - 36, x + 20 + swing, y + 4]).fill(it.used ? 0x5a4a30 : 0xa8823e).stroke({ width: 4, color: PAL.ink });
       break;
     }
-    case "sarcophagus": {
-      g.ellipse(x, y + 60, 80, 16).fill({ color: PAL.ink, alpha: 0.6 });
-      g.rect(x - 60, y - 70, 120, 130).fill(0x4a4440).stroke({ width: OUT, color: PAL.ink });
-      g.rect(x - 52, y - 62, 104, 114).fill(highlight ? 0x5e5650 : 0x524a46);
-      g.circle(x, y - 30, 16).fill(0x3a3430).stroke({ width: 3, color: PAL.ink });
+    case "sarcophagus":
+      drawSarcophagus(g, glow, it, t, highlight);
       break;
-    }
     case "echoAltar": {
       g.ellipse(x, y + 40, 90, 18).fill({ color: PAL.ink, alpha: 0.6 });
       g.rect(x - 70, y - 20, 140, 60).fill(0x2e2a30).stroke({ width: OUT, color: PAL.ink });
@@ -559,9 +555,84 @@ export function drawInteractable(g: Graphics, glow: Graphics, it: Interactable, 
     case "note":
       if (!it.used) drawNote(g, x, y);
       break;
+    case "ledger": {
+      // a lectern with the open ledger of the dead
+      g.ellipse(x, y + 40, 50, 12).fill({ color: PAL.ink, alpha: 0.6 });
+      g.rect(x - 8, y - 20, 16, 60).fill(PAL.woodMid).stroke({ width: 4, color: PAL.ink });
+      g.rect(x - 26, y + 30, 52, 10).fill(PAL.woodMid).stroke({ width: 3, color: PAL.ink });
+      g.poly([x - 46, y - 18, x + 46, y - 18, x + 40, y - 44, x - 40, y - 44]).fill(PAL.wood).stroke({ width: 4, color: PAL.ink });
+      g.poly([x - 40, y - 24, x - 2, y - 26, x - 2, y - 50, x - 36, y - 46]).fill(0xd8c8a0).stroke({ width: 2, color: PAL.ink });
+      g.poly([x + 40, y - 24, x + 2, y - 26, x + 2, y - 50, x + 36, y - 46]).fill(0xd8c8a0).stroke({ width: 2, color: PAL.ink });
+      for (let i = 0; i < 4; i++) {
+        g.moveTo(x - 32, y - 44 + i * 5).lineTo(x - 8, y - 45 + i * 5).stroke({ width: 1.2, color: 0x5a4a3a });
+        g.moveTo(x + 8, y - 45 + i * 5).lineTo(x + 32, y - 44 + i * 5).stroke({ width: 1.2, color: 0x5a4a3a });
+      }
+      if (highlight) glow.circle(x, y - 36, 50).fill({ color: PAL.soul, alpha: 0.08 });
+      break;
+    }
     default:
       break;
   }
+}
+
+/** Eyes of the six characters, glowing from their sarcophagus lids. */
+const HERO_EYES: Record<string, number> = { grabarz: PAL.ember, nekromanta: 0xc88aff, lisz: 0x6affd8, medyk: 0x8aff6a, kaplan: 0xffd090, wiedzma: 0xff4a4a };
+
+/** A sarcophagus in the crypt: chained shut, cracking with echo, or carved with its sleeper's face. */
+function drawSarcophagus(g: Graphics, glow: Graphics, it: Interactable, t: number, highlight: boolean): void {
+  const { x, y } = it.pos;
+  const look = it.look ?? "sealed";
+  const id = it.ref ?? "grabarz";
+  g.ellipse(x, y + 60, 80, 16).fill({ color: PAL.ink, alpha: 0.6 });
+  g.rect(x - 60, y - 70, 120, 130).fill(0x4a4440).stroke({ width: OUT, color: PAL.ink });
+  g.rect(x - 52, y - 62, 104, 114).fill(highlight ? 0x5e5650 : 0x524a46);
+  if (look === "sealed") {
+    // chains across a blank lid and a lock
+    for (const [x0, y0, x1, y1] of [[x - 52, y - 60, x + 52, y + 50], [x + 52, y - 60, x - 52, y + 50]] as const) {
+      g.moveTo(x0, y0).lineTo(x1, y1).stroke({ width: 8, color: PAL.ink });
+      g.moveTo(x0, y0).lineTo(x1, y1).stroke({ width: 4, color: 0x6a6660 });
+    }
+    g.rect(x - 9, y - 12, 18, 16).fill(0x5a5048).stroke({ width: 3, color: PAL.ink });
+    g.moveTo(x - 5, y - 12).quadraticCurveTo(x, y - 24, x + 5, y - 12).stroke({ width: 3, color: 0x6a6660 });
+    return;
+  }
+  // the sleeper's face carved in the lid
+  const hx = x;
+  const hy = y - 22;
+  g.ellipse(hx, hy + 4, 30, 40).fill(0x3e3834);
+  switch (id) {
+    case "nekromanta":
+      g.poly([hx - 14, hy - 8, hx - 26, hy - 34, hx - 6, hy - 14]).fill(0x8a8070);
+      g.poly([hx + 14, hy - 8, hx + 26, hy - 34, hx + 6, hy - 14]).fill(0x8a8070);
+      break;
+    case "lisz":
+      for (let i = 0; i < 5; i++) g.poly([hx - 14 + i * 7, hy - 16, hx - 11 + i * 7, hy - 30 - (i % 2) * 6, hx - 8 + i * 7, hy - 16]).fill(0x8a8070);
+      break;
+    case "medyk":
+      g.poly([hx + 4, hy + 4, hx + 24, hy + 18, hx + 4, hy + 12]).fill(0x8a8070);
+      break;
+    case "kaplan":
+      g.rect(hx - 9, hy + 22, 18, 5).fill(0xb8b0a0);
+      break;
+    case "wiedzma":
+      for (let i = 0; i < 5; i++) g.moveTo(hx - 12 + i * 6, hy - 14).lineTo(hx - 20 + i * 10, hy + 24).stroke({ width: 3, color: 0x6a6258 });
+      break;
+    default:
+      break;
+  }
+  g.poly([hx - 20, hy + 26, hx - 18, hy - 10, hx, hy - 26, hx + 18, hy - 10, hx + 20, hy + 26]).fill(0x2a2624);
+  g.ellipse(hx, hy + 2, 11, 13).fill(PAL.ink);
+  const eyes = HERO_EYES[id] ?? PAL.ember;
+  if (look === "buyable") {
+    // the lid cracks: the echo seeps out
+    g.moveTo(x - 40, y + 40).lineTo(x - 18, y + 10).lineTo(x - 26, y - 6).stroke({ width: 3, color: PAL.ink });
+    glow.moveTo(x - 40, y + 40).lineTo(x - 18, y + 10).lineTo(x - 26, y - 6).stroke({ width: 2, color: 0x8ab4ff, alpha: 0.5 + 0.3 * Math.sin(t * 3) });
+    glow.circle(hx, hy, 40).fill({ color: 0x8ab4ff, alpha: 0.06 + 0.03 * Math.sin(t * 2) });
+    return;
+  }
+  glow.circle(hx - 4, hy, 2.4).fill(eyes);
+  glow.circle(hx + 4, hy, 2.4).fill(eyes);
+  if (look === "chosen") glow.ellipse(x, y - 4, 64, 74).fill({ color: eyes, alpha: 0.07 + 0.03 * Math.sin(t * 2) });
 }
 
 function drawNote(g: Graphics, x: number, y: number): void {

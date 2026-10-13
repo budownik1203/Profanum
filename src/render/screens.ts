@@ -121,14 +121,14 @@ export class Screens {
     return hovered;
   }
 
-  /** End of a run: death or victory. */
-  summary(title: string, lines: string[], victory: boolean, footer: string): void {
+  /** A framed list of lines in the middle of the screen: the end of a run, the crypt's ledger. */
+  summary(title: string, lines: string[], color: number, footer: string): void {
     this.dim(0.7);
     const h = 220 + lines.length * 44;
     const top = (VIEW_H - h) / 2;
-    frame(this.g, VIEW_W / 2 - 420, top, 840, h, 0.9);
-    this.tx.text(title, VIEW_W / 2, top + 64, { size: 64, font: "display", color: victory ? 0xf4e2a8 : PAL.heart, align: "center", stroke: true }, 0.5, 0.5);
-    lines.forEach((l, i) => this.tx.text(l, VIEW_W / 2, top + 140 + i * 44, { size: 28, align: "center" }, 0.5, 0.5));
+    frame(this.g, VIEW_W / 2 - 460, top, 920, h, 0.9);
+    this.tx.text(title, VIEW_W / 2, top + 64, { size: 64, font: "display", color, align: "center", stroke: true }, 0.5, 0.5);
+    lines.forEach((l, i) => this.tx.text(l, VIEW_W / 2, top + 140 + i * 44, { size: 27, align: "center", wrap: 860 }, 0.5, 0.5));
     this.tx.text(footer, VIEW_W / 2, top + h - 40, { size: 24, color: PAL.ember, align: "center" }, 0.5, 0.5);
   }
 
@@ -171,15 +171,22 @@ export class Screens {
     return hovered;
   }
 
-  /** What the sarcophagus the necromancer stands at holds. */
+  /** What the sarcophagus the necromancer stands at holds (a long last line is its story, in italics). */
   panel(title: string, lines: string[], footer: string, accent: number): void {
-    const w = 760;
-    const h = 120 + lines.length * 32;
+    const w = 820;
+    const perLine = Math.floor((w - 60) / 9.5);
+    const heights = lines.map((l) => 32 * Math.max(1, Math.ceil(l.length / perLine)));
+    const h = 110 + heights.reduce((a, b) => a + b, 0);
     const x = (VIEW_W - w) / 2;
     const y = VIEW_H - h - 190;
     frame(this.g, x, y, w, h, 0.88);
     this.tx.text(title, VIEW_W / 2, y + 36, { size: 36, font: "display", color: accent, align: "center" }, 0.5, 0.5);
-    lines.forEach((l, i) => this.tx.text(l, VIEW_W / 2, y + 78 + i * 32, { size: 21, align: "center", wrap: w - 60 }, 0.5, 0.5));
+    let ly = y + 64;
+    lines.forEach((l, i) => {
+      const story = i === lines.length - 1 && lines.length > 2;
+      this.tx.text(l, VIEW_W / 2, ly + heights[i] / 2, { size: story ? 19 : 21, color: story ? 0xb8a890 : PAL.hudText, italic: story, align: "center", wrap: w - 60 }, 0.5, 0.5);
+      ly += heights[i];
+    });
     this.tx.text(footer, VIEW_W / 2, y + h - 26, { size: 22, color: PAL.ember, align: "center" }, 0.5, 0.5);
   }
 

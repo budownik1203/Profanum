@@ -19,7 +19,7 @@ import { World, idleInput } from "./game/world.js";
 import { CONFIG } from "./game/config.js";
 import { setLang, soulsWord, t } from "./i18n.js";
 import { Input } from "./input.js";
-import { Narrator, SKULL, lineOf } from "./narrator.js";
+import { Narrator, lineOf, nextSkullLine } from "./narrator.js";
 import { noteText } from "./notes.js";
 import { PAL } from "./palette.js";
 import { drawHud } from "./render/hud.js";
@@ -33,7 +33,7 @@ const STEP = 1 / 60;
 const MAX_STEPS = 5;
 
 type Mode = "title" | "hub" | "run" | "summary";
-type Overlay = null | "pause" | "options" | "note" | "echoAltar";
+type Overlay = null | "pause" | "options" | "note" | "echoAltar" | "ledger";
 
 async function boot(): Promise<void> {
   const app = new Application();
@@ -85,8 +85,20 @@ async function boot(): Promise<void> {
   const world = (): World | null => (mode === "hub" ? hub : run ? run.world : null);
 
   // ---------------------------------------------------------------- transitions
+  /** The sarcophagi show who sleeps, who can be woken and who is chosen. */
+  const refreshHub = () => {
+    if (!hub) return;
+    for (const it of hub.interactables) {
+      if (it.kind !== "sarcophagus") continue;
+      const id = it.ref as CharacterId;
+      const st = characterState(meta, id);
+      it.look = st === "owned" && meta.selected === id ? "chosen" : st;
+    }
+  };
+
   const enterHub = () => {
     hub = buildHub(meta.selected);
+    refreshHub();
     mode = "hub";
     overlay = null;
     view.reset();
@@ -106,7 +118,8 @@ async function boot(): Promise<void> {
     lastFloor = r.floor;
     saveRun(store, r.snapshot());
     floorBanner(r);
-    if (fresh) narrator.say("intro", 0, true);
+    // half the time the narrator remembers who exactly crawled out of the grave
+    if (fresh) narrator.say(Math.random() < 0.5 ? `intro.${r.character}` : "intro", 0, true);
     else narrator.newFloor(r.world.theme);
   };
 
@@ -248,9 +261,16 @@ async function boot(): Promise<void> {
       return;
     }
     if (ref === "skull") {
-      narrator.show(lineOf(SKULL[meta.skull % SKULL.length]), 6);
+      const next = nextSkullLine(meta.skullHeard, { ...meta.stats });
+      narrator.show(lineOf(next.line), 7);
+      if (next.index >= 0) meta.skullHeard.push(next.index);
       meta.skull += 1;
       persist();
+      return;
+    }
+    if (ref === "ledger") {
+      overlay = "ledger";
+      input.releaseMouse();
       return;
     }
     if (ref in CHARACTERS) {
@@ -266,6 +286,7 @@ async function boot(): Promise<void> {
       }
       const pos = { ...hub.player.pos };
       hub.player = makePlayer(meta.selected, pos);
+      refreshHub();
       persist();
     }
   };
@@ -315,6 +336,8 @@ async function boot(): Promise<void> {
             return { text: t("hub.altar"), pos };
           case "skull":
             return { text: t("hub.skull"), pos };
+          case "ledger":
+            return { text: t("hub.ledger"), pos };
           case "sarcophagus":
             return null; // the sarcophagus panel says it all
           default:
@@ -325,13 +348,30 @@ async function boot(): Promise<void> {
   };
 
   /** The panel shown at a sarcophagus in the crypt. */
+  const ledgerLines = (): string[] => {
+    const st = meta.stats;
+    const floors = ["cmentarz", "slumsy", "kupiecka", "klasztor", "katedra", "sanktuarium"];
+    const deepest = st.deepest > 0 ? t(`floor.${floors[Math.min(floors.length, st.deepest) - 1]}`) : t("ledger.never");
+    const bosses = st.bosses.length ? st.bosses.map((b) => t(`unit.${b}`)).join(", ") : t("ledger.none");
+    return [
+      t("ledger.runs", { runs: st.runs, wins: st.wins, deaths: st.deaths }),
+      t("ledger.kills", { n: st.kills }),
+      t("ledger.raised", { n: st.raised }),
+      t("ledger.deepest", { floor: deepest }),
+      t("ledger.bosses", { list: bosses }),
+      t("ledger.woken", { n: meta.characters.length }),
+      t("ledger.unlocked", { n: meta.unlocked.length, m: UNLOCKABLES.length }),
+      t("ledger.echo", { n: meta.echo }),
+    ];
+  };
+
   const sarcophagusPanel = (w: World) => {
     const near = w.interactables.find((it) => it.kind === "sarcophagus" && Math.hypot(it.pos.x - w.player.pos.x, it.pos.y - w.player.pos.y) < it.radius + 30);
     if (!near) return;
     const id = near.ref as CharacterId;
     const def = CHARACTERS[id];
     const st = characterState(meta, id);
-    const lines = [t(`charDesc.${id}`), `${t(`weapon.${def.weapon}`)} · ${def.hearts} ♥`];
+    const lines = [t(`charDesc.${id}`), `${t(`weapon.${def.weapon}`)} · ${def.hearts} ♥`, t(`charStory.${id}`)];
     let footer: string;
     if (st === "owned") footer = meta.selected === id ? t("hub.chosen", { name: t(`char.${id}`) }) : t("hub.select");
     else if (st === "buyable") footer = meta.echo >= def.unlock!.echo ? t("hub.buy", { n: def.unlock!.echo }) : t("hub.need", { n: def.unlock!.echo });
@@ -489,6 +529,11 @@ async function boot(): Promise<void> {
     get overlay() {
       return overlay;
     },
+    /** Open an overlay directly (screenshots). */
+    show(o: string) {
+      overlay = o as Overlay;
+      sel = 0;
+    },
   };
 
   // ---------------------------------------------------------------- the loop
@@ -617,12 +662,13 @@ async function boot(): Promise<void> {
     });
     if (mode === "hub" && hub && overlay === null) {
       sarcophagusPanel(hub);
-      screens.controls(CONTROLS(), t("legend.title"));
+      // the controls stay on the wall for the first descents (later: on the pause screen)
+      if (meta.stats.runs < 2) screens.controls(CONTROLS(), t("legend.title"));
     }
 
     // ---- overlays
     if (mode === "summary" && summary) {
-      screens.summary(summary.victory ? t("sum.victory") : t("sum.death"), summary.lines, summary.victory, t("sum.continue"));
+      screens.summary(summary.victory ? t("sum.victory") : t("sum.death"), summary.lines, summary.victory ? 0xf4e2a8 : PAL.heart, t("sum.continue"));
       if (accept || clicked) {
         input.releaseMouse();
         summary = null;
@@ -644,6 +690,12 @@ async function boot(): Promise<void> {
       if (esc) overlay = overlayBack;
     } else if (overlay === "note") {
       screens.note(note, t("note.close"));
+      if (esc || accept || clicked) {
+        overlay = null;
+        input.releaseMouse();
+      }
+    } else if (overlay === "ledger") {
+      screens.summary(t("ledger.title"), ledgerLines(), 0xe8d8b8, t("ledger.close"));
       if (esc || accept || clicked) {
         overlay = null;
         input.releaseMouse();

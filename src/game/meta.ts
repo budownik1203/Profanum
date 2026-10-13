@@ -28,8 +28,10 @@ export interface Meta {
   challenges: Challenge[];
   stats: { runs: number; wins: number; deaths: number; kills: number; raised: number; deepest: number; bosses: string[] };
   settings: Settings;
-  /** Where the talking skull is in its story. */
+  /** Where the talking skull is in its story (old saves: how many lines it said). */
   skull: number;
+  /** Lines of the skull's story already heard (indices into SKULL_STORY). */
+  skullHeard: number[];
 }
 
 export interface Store {
@@ -91,6 +93,7 @@ export function freshMeta(): Meta {
     stats: { runs: 0, wins: 0, deaths: 0, kills: 0, raised: 0, deepest: 0, bosses: [] },
     settings: { shake: 1, volume: 0.8, music: 0.6, numbers: true, grace: false, lang: "pl" },
     skull: 0,
+    skullHeard: [],
   };
 }
 
@@ -106,6 +109,7 @@ export function loadMeta(store: Store): Meta {
       stats: { ...fresh.stats, ...(m.stats ?? {}) },
       settings: { ...fresh.settings, ...(m.settings ?? {}) },
       characters: m.characters?.length ? m.characters : fresh.characters,
+      skullHeard: Array.isArray(m.skullHeard) ? m.skullHeard : [],
     };
   } catch {
     return fresh;

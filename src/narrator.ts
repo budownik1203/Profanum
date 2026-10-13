@@ -14,6 +14,30 @@ const LINES: Record<string, Line[]> = {
     ["Masowy grób jest płytki. Twoja zemsta sięga głębiej.", "The mass grave is shallow. Your vengeance runs deeper."],
     ["Wstań, heretyku. Miasto jeszcze nie skończyło świętować.", "Rise, heretic. The city has not finished celebrating."],
   ],
+  "intro.grabarz": [
+    ["Grabarz wstaje z grobu, który sam wykopał. Ironia ma swój urok.", "The gravedigger rises from a grave he dug himself. Irony has its charm."],
+    ["Łopatę zamienił na pistolet. Robota została ta sama: chować ludzi.", "He traded the shovel for a pistol. The work is the same: putting people in the ground."],
+  ],
+  "intro.nekromanta": [
+    ["Uczony wraca do lektury. Tym razem czyta z trupów.", "The scholar returns to his reading. This time he reads the dead."],
+    ["Spalili jego księgi. Zapomnieli, że znał je na pamięć.", "They burned his books. They forgot he knew them by heart."],
+  ],
+  "intro.lisz": [
+    ["Sto lat w grobie, a miasto wcale się nie zmieniło.", "A hundred years in the grave, and the city has not changed at all."],
+    ["Wymazali jego imię z kronik. On pamięta wszystkie ich imiona.", "They scratched his name from the chronicles. He remembers all of theirs."],
+  ],
+  "intro.medyk": [
+    ["Doktor przyjmuje. Bez umówienia i bez znieczulenia.", "The doctor is in. No appointment, no anaesthetic."],
+    ["Leczył ich, gdy księża uciekli. Teraz przepisuje im coś mocniejszego.", "He healed them when the priests ran. Now he prescribes something stronger."],
+  ],
+  "intro.kaplan": [
+    ["Ojciec wraca na swoją parafię. Ostatnie namaszczenie dla całego miasta.", "Father returns to his parish. Last rites for the whole city."],
+    ["Spłonął z monstrancją w dłoniach. Monstrancja przetrwała. On też.", "He burned with the monstrance in his hands. The monstrance survived. So did he."],
+  ],
+  "intro.wiedzma": [
+    ["Sznur pamięta każdą szyję. Czas przypomnieć je miastu.", "The rope remembers every neck. Time to remind the city."],
+    ["Nie dała się powiesić. Nie da się też zapomnieć.", "She would not hang. Nor will she be forgotten."],
+  ],
   "floor.cmentarz": [["Cmentarz. Tu kończą ci, których Kościół nie zdążył spalić.", "The cemetery. Where those the Church failed to burn end up."]],
   "floor.slumsy": [["Slumsy cuchną zarazą i strachem. Jedno i drugie ci służy.", "The slums reek of plague and fear. Both serve you well."]],
   "floor.kupiecka": [["Dzielnica kupców: tu wszystko ma cenę. Nawet dusza.", "The merchant quarter: everything has a price here. Even a soul."]],
@@ -76,20 +100,53 @@ const LINES: Record<string, Line[]> = {
 };
 
 /** The talking skull in the crypt tells its story a line at a time. */
-export const SKULL: Line[] = [
-  ["Witaj z powrotem, popiele. Krypta pamięta każdego, kto wrócił.", "Welcome back, ash. The crypt remembers everyone who returned."],
-  ["Echo Dusz to wszystko, co zostaje po wyprawie. Wydawaj je mądrze na ołtarzu.", "The Echo of Souls is all a descent leaves behind. Spend it wisely at the altar."],
-  ["W sarkofagach śpią inni, których Kościół spalił. Obudzą się, gdy udowodnisz swoje.", "Others the Church burned sleep in those sarcophagi. They wake once you prove yourself."],
-  ["Gaś światło. W mroku twoje sługi rosną w siłę, a ty jesteś tylko cieniem.", "Put out the light. In the dark your minions grow strong and you are only a shadow."],
-  ["Stos płonie świętym ogniem. Nie stój w nim, chyba że lubisz zapach własnego popiołu.", "The stake burns with holy fire. Don't stand in it, unless you like the smell of your own ash."],
-  ["Szczątki przeklętej broni zanieś na ołtarz. Legenda kosztuje dusze, ale oddaje z nawiązką.", "Bring cursed weapon remains to an altar. A legend costs souls, but repays them."],
-  ["Dzwonnika zabij pierwszego. Dzwon budzi sąsiednie pokoje.", "Kill the bellringer first. The bell wakes the rooms around."],
-  ["Pod każdym piętrem są katakumby. Szukaj pękniętych ścian i strzelaj w nie.", "There are catacombs under every floor. Look for cracked walls and shoot them."],
-  ["Trzy trupy i trochę dusz: tyle trzeba, by zszyć abominację. Szwy są opcjonalne.", "Three corpses and a few souls: that's all an abomination takes. Stitches optional."],
-  ["Paser przyjmuje każde złoto. Nawet to wyjęte z kieszeni trupa.", "The fence takes any gold. Even from a dead man's pocket."],
-  ["Mówią, że Święty Płomień to bóg. Byłem mnichem. Widziałem, czym się karmi.", "They say the Holy Flame is a god. I was a monk. I saw what it feeds on."],
-  ["Wracasz znowu. Dobrze. Miasto jeszcze stoi.", "You're back again. Good. The city still stands."],
+/** What the skull knows about the necromancer's progress (from the crypt's records). */
+export interface SkullContext {
+  runs: number;
+  deaths: number;
+  wins: number;
+  deepest: number;
+  bosses: string[];
+}
+
+/** The talking skull's story: advice first, then lines that open up as the necromancer gets further. */
+export const SKULL_STORY: { line: Line; when?: (c: SkullContext) => boolean }[] = [
+  { line: ["Witaj z powrotem, popiele. Krypta pamięta każdego, kto wrócił.", "Welcome back, ash. The crypt remembers everyone who returned."] },
+  { line: ["Echo Dusz to wszystko, co zostaje po wyprawie. Wydawaj je mądrze na ołtarzu.", "The Echo of Souls is all a descent leaves behind. Spend it wisely at the altar."] },
+  { line: ["W sarkofagach śpią inni, których Kościół spalił. Obudzą się, gdy udowodnisz swoje.", "Others the Church burned sleep in those sarcophagi. They wake once you prove yourself."] },
+  { line: ["Gaś światło. W mroku twoje sługi rosną w siłę, a ty jesteś tylko cieniem.", "Put out the light. In the dark your minions grow strong and you are only a shadow."] },
+  { line: ["Umarłeś. Witaj w klubie: jest nas tu więcej, niż myślisz.", "You died. Welcome to the club: there are more of us down here than you think."], when: (c) => c.deaths >= 1 },
+  { line: ["Stos płonie świętym ogniem. Nie stój w nim, chyba że lubisz zapach własnego popiołu.", "The stake burns with holy fire. Don't stand in it, unless you like the smell of your own ash."] },
+  { line: ["Kat Miejski nie żyje. Pierwszy raz ktoś mu się odwdzięczył.", "The City Executioner is dead. The first time anyone ever repaid him in kind."], when: (c) => c.bosses.includes("executioner") },
+  { line: ["Szczątki przeklętej broni zanieś na ołtarz. Legenda kosztuje dusze, ale oddaje z nawiązką.", "Bring cursed weapon remains to an altar. A legend costs souls, but repays them."] },
+  { line: ["Dzwonnika zabij pierwszego. Dzwon budzi sąsiednie pokoje.", "Kill the bellringer first. The bell wakes the rooms around."], when: (c) => c.deepest >= 2 },
+  { line: ["Kapitan padł. Straż bez kapitana to tylko ludzie z halabardami i złymi snami.", "The Captain has fallen. A watch without its captain is just men with halberds and bad dreams."], when: (c) => c.bosses.includes("captain") },
+  { line: ["Pod każdym piętrem są katakumby. Szukaj pękniętych ścian i strzelaj w nie.", "There are catacombs under every floor. Look for cracked walls and shoot them."] },
+  { line: ["Trzy trupy i trochę dusz: tyle trzeba, by zszyć abominację. Szwy są opcjonalne.", "Three corpses and a few souls: that's all an abomination takes. Stitches optional."] },
+  { line: ["Mistrz Prochu wyleciał w powietrze. Zawsze mówiłem, że skończy z hukiem.", "The Powder Master went up. I always said he'd go out with a bang."], when: (c) => c.bosses.includes("powdermaster") },
+  { line: ["Paser przyjmuje każde złoto. Nawet to wyjęte z kieszeni trupa.", "The fence takes any gold. Even from a dead man's pocket."] },
+  { line: ["Klasztor... Byłem tam mnichem. Pod skryptorium jest cela, w której spisywano, czym się karmi Płomień.", "The monastery... I was a monk there. Under the scriptorium is a cell where they wrote down what the Flame feeds on."], when: (c) => c.deepest >= 4 },
+  { line: ["Biskup spadł z lektyki. Wierni, którzy go nieśli, teraz niosą twoje rozkazy.", "The Bishop fell off his litter. The faithful who carried him now carry your orders."], when: (c) => c.bosses.includes("bishop") },
+  { line: ["Mówią, że Święty Płomień to bóg. Widziałem, czym się karmi. Bogowie tak nie jedzą.", "They say the Holy Flame is a god. I saw what it feeds on. Gods do not eat like that."], when: (c) => c.deepest >= 4 },
+  { line: ["Inkwizytor nie żyje, jego latarnia zgasła. Został już tylko On.", "The Inquisitor is dead and his lantern is out. Only It remains."], when: (c) => c.bosses.includes("grandinquisitor") },
+  { line: ["Widziałeś go. Teraz rozumiesz, czemu nie mówię o nim głośno.", "You have seen it. Now you understand why I never speak of it aloud."], when: (c) => c.deepest >= 6 },
+  { line: ["Płomień zgasł. Miasto pierwszy raz od stu lat śpi w ciemności. Myślisz, że jest wdzięczne?", "The Flame is out. For the first time in a hundred years the city sleeps in the dark. Do you think it is grateful?"], when: (c) => c.wins >= 1 },
+  { line: ["Kościół już szuka nowego płomienia. Wiara nie znosi pustki. My też nie.", "The Church is already looking for a new flame. Faith abhors a vacuum. So do we."], when: (c) => c.wins >= 1 },
 ];
+
+/** When the story runs out, the skull mutters. */
+const SKULL_IDLE: Line[] = [
+  ["Wracasz znowu. Dobrze. Miasto jeszcze stoi.", "You're back again. Good. The city still stands."],
+  ["Krypta czeka. Ona zawsze czeka.", "The crypt waits. It always waits."],
+  ["Nie patrz tak. Też kiedyś miałem twarz.", "Don't stare. I had a face once too."],
+];
+
+/** The next thing the skull has to say, and which line of its story it was (-1: just muttering). */
+export function nextSkullLine(heard: number[], c: SkullContext, roll = Math.random()): { index: number; line: Line } {
+  const i = SKULL_STORY.findIndex((s, k) => !heard.includes(k) && (!s.when || s.when(c)));
+  if (i >= 0) return { index: i, line: SKULL_STORY[i].line };
+  return { index: -1, line: SKULL_IDLE[Math.floor(roll * SKULL_IDLE.length) % SKULL_IDLE.length] };
+}
 
 const pickLine = (lines: Line[]): string => {
   const l = lines[Math.floor(Math.random() * lines.length)];

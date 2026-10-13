@@ -414,7 +414,7 @@ export interface Chest {
   mimic: boolean;
 }
 
-export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull";
+export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger";
 
 export interface Interactable {
   id: number;
@@ -429,6 +429,8 @@ export interface Interactable {
   /** Secret wall: shots left to break through; which wall it is in. */
   hp?: number;
   side?: Side;
+  /** Presentation only: how the crypt shows it (a sarcophagus "owned", "buyable", "sealed", "chosen"). */
+  look?: string;
 }
 
 export interface Cover {

@@ -14,6 +14,7 @@ export interface TStyle {
   wrap?: number;
   /** Dark outline for legibility over the arena. */
   stroke?: boolean;
+  italic?: boolean;
 }
 
 const FONTS = {
@@ -21,7 +22,7 @@ const FONTS = {
   body: "Spectral, Georgia, 'Times New Roman', serif",
 };
 
-const keyOf = (s: TStyle) => `${s.size}|${s.color ?? PAL.hudText}|${s.font ?? "body"}|${s.bold ? 1 : 0}|${s.align ?? "left"}|${s.wrap ?? 0}|${s.stroke ? 1 : 0}`;
+const keyOf = (s: TStyle) => `${s.size}|${s.color ?? PAL.hudText}|${s.font ?? "body"}|${s.bold ? 1 : 0}|${s.align ?? "left"}|${s.wrap ?? 0}|${s.stroke ? 1 : 0}|${s.italic ? 1 : 0}`;
 
 function styleOf(s: TStyle): Record<string, unknown> {
   const st: Record<string, unknown> = {
@@ -29,6 +30,7 @@ function styleOf(s: TStyle): Record<string, unknown> {
     fontSize: s.size,
     fill: s.color ?? PAL.hudText,
     fontWeight: s.bold ? "bold" : "normal",
+    fontStyle: s.italic ? "italic" : "normal",
     align: s.align ?? "left",
     lineHeight: Math.round(s.size * 1.25),
   };
