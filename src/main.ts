@@ -30,6 +30,8 @@ import { Screens, type InvRow, type InvSection, type MenuView } from "./render/s
 import { buildCodexView } from "./render/codexview.js";
 import { CODEX_SECTIONS, noteEvents, noteWorld } from "./game/codex.js";
 import { type Drill, formSquads } from "./game/tactics.js";
+import { planRoom } from "./game/reinforce.js";
+import { floorDef } from "./game/data/floors.js";
 import type { UnitKind } from "./game/data/units.js";
 import type { ItemId, RelicId } from "./game/data/items.js";
 import type { WeaponId } from "./game/data/weapons.js";
@@ -441,6 +443,11 @@ async function boot(): Promise<void> {
         case "roomCleared":
           showBanner(t("banner.cleared"), undefined, 1.8);
           break;
+        case "hold":
+          if (e.stage === "start") showBanner(t("banner.hold"), t("banner.holdSub", { n: Math.round(e.left) }), 2.4);
+          else if (e.stage === "over") showBanner(t("banner.holdOver"), t("banner.holdOverSub"), 2);
+          else showBanner(t("banner.holdWon"), undefined, 2);
+          break;
         case "trial":
           if (e.stage === "start") showBanner(t("banner.trial"), t("banner.trialSub", { n: e.waves }), 2.2);
           else if (e.stage === "wave") showBanner(t("banner.trialWave", { n: e.wave, m: e.waves }), undefined, 1.4);
@@ -625,6 +632,13 @@ async function boot(): Promise<void> {
       w.alarm = false;
       for (const [kind, x, y] of spec) w.spawn(kind as UnitKind, { x, y }, undefined, { state: "idle" });
       formSquads(w, Math.random, run?.depth ?? 1, drill ?? null);
+    },
+    /** Turn the room into a last stand (screenshots). */
+    hold() {
+      const w = world();
+      if (!w || !run) return;
+      w.units = w.units.filter((u) => u.team === "minion");
+      planRoom(w, floorDef(Math.min(run.depth, 5)), Math.random, { hold: true });
     },
     /** Sound the alarm in the room. */
     alarm() {

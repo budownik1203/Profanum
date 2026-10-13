@@ -313,6 +313,22 @@ export class GameRenderer {
           }
           break;
         }
+        case "reinforcements":
+          for (let i = 0; i < 8; i++) this.spawn(e.pos, rnd(-80, 80), rnd(-90, 10), rnd(0.3, 0.6), rnd(5, 10), PAL.smoke, "smoke");
+          if (e.first) this.floatText(e.pos, t("float.reinforcements"), PAL.telegraph, 30, 1.4);
+          break;
+        case "ambushOut":
+          for (let i = 0; i < 12; i++) this.spawn(e.pos, rnd(-180, 180), rnd(-200, 20), rnd(0.4, 0.8), rnd(4, 9), 0x5a4028, "splinter");
+          this.floatText(e.pos, t("float.ambushOut"), PAL.telegraph, 28, 1.1);
+          this.addShake(5);
+          break;
+        case "riteBroken":
+          for (let i = 0; i < 20; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-140, 20), rnd(0.3, 0.7), rnd(2, 4), 0x6ad46a, "spark");
+          this.floatText(e.pos, t("float.riteBroken"), 0x6ad46a, 26, 1.4);
+          break;
+        case "hunt":
+          this.floatText(e.pos, t("float.hunt"), PAL.ember, 32, 1.6);
+          break;
         case "summon":
           for (let i = 0; i < 14; i++) this.spawn(e.pos, rnd(-60, 60), rnd(-120, -20), rnd(0.4, 0.9), rnd(6, 12), 0x1a2a1a, "smoke");
           for (let i = 0; i < 8; i++) this.spawn(e.pos, rnd(-90, 90), rnd(-140, -30), rnd(0.3, 0.6), rnd(1.5, 3), 0x6ad46a, "spark");
@@ -588,7 +604,8 @@ export class GameRenderer {
     const g = this.actorsG;
     g.clear();
     // draw back to front by y so overlaps read correctly in 3/4 view
-    const actors: { y: number; draw: () => void }[] = world.units.map((u) => {
+    // ambushers lying in wait are not to be seen
+    const actors: { y: number; draw: () => void }[] = world.units.filter((u) => !u.hidden).map((u) => {
       const m = this.step(u.id, u.pos, (u.def.size ?? 1) * 14);
       return { y: u.pos.y, draw: () => drawUnit(g, this.glowG, u, world, this.telegraphs.get(u.id) ?? 0, m) };
     });

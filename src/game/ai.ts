@@ -26,6 +26,8 @@ export function updateUnit(w: World, u: Unit, dt: number): void {
   u.cooldown2 -= dt;
   tickStatus(w, u, dt);
   if (!u.alive) return;
+  // lying in wait: nothing moves (reinforce.ts brings him out)
+  if (u.hidden) return;
   if (u.def.ai === "boss") {
     updateBoss(w, u, dt);
     return;
@@ -647,15 +649,18 @@ function keepRange(_w: World, u: Unit, t: Target, _dt: number): Vec {
 }
 
 const bellringer: Behaviour = (w, u, t, dt) => {
-  const bell = w.interactables.find((i) => i.kind === "bell" && !i.used);
+  const bell = w.interactables.find((i) => i.kind === "bell");
   if (u.team !== "minion" && bell && w.alarm) {
     if (u.state === "ring") {
       if (u.timer <= 0) {
-        bell.used = true;
-        w.bellRung = true;
-        w.events.push({ type: "bell", pos: { ...bell.pos }, done: true });
-        w.ctx.alarmNeighbours?.();
-        u.state = "approach";
+        // the first toll wakes the neighbours; he keeps tolling, and every toll calls someone (reinforce.ts)
+        if (!bell.used) {
+          bell.used = true;
+          w.bellRung = true;
+          w.events.push({ type: "bell", pos: { ...bell.pos }, done: true });
+          w.ctx.alarmNeighbours?.();
+        } else w.events.push({ type: "bell", pos: { ...bell.pos }, done: false });
+        u.timer = 2.2;
       }
       return vec();
     }

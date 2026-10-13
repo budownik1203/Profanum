@@ -24,6 +24,7 @@ import { updateLights } from "./lighting.js";
 import { interact, raisableCorpse as findRaisable, updatePickups, onRoomCleared, updateTrial } from "./loot.js";
 import { useRelic, useSpecial } from "./relics.js";
 import { updateSquads } from "./tactics.js";
+import { type Reinforce, reinforcementsPending, updateReinforce } from "./reinforce.js";
 
 export type * from "./types.js";
 
@@ -76,6 +77,8 @@ export class World {
   squads: Squad[] = [];
   /** A trial room's waves (rooms.ts / trial in loot.ts). */
   trial: Trial | null = null;
+  /** Waves, help from next door, ambushes, rites, the hunt, the last stand (reinforce.ts). */
+  reinforce: Reinforce | null = null;
   pickups: Pickup[] = [];
   chests: Chest[] = [];
   interactables: Interactable[] = [];
@@ -348,7 +351,7 @@ export class World {
     const anchor = this.order ? this.order.pos : u.pos;
     const reach = this.order ? CONFIG.necro.commandRadius : Infinity;
     for (const e of this.units) {
-      if (e.team === "minion" || !e.alive) continue;
+      if (e.team === "minion" || !e.alive || e.hidden) continue;
       const d = dist(anchor, e.pos);
       if (d < reach && d < bestD) {
         bestD = d;
@@ -369,6 +372,7 @@ export class World {
     if (this.player.alive) this.updatePlayer(dt, input);
     if (this.squads.length) updateSquads(this, dt);
     if (this.trial?.active) updateTrial(this, dt);
+    if (this.reinforce) updateReinforce(this, dt);
     for (const u of this.units) if (u.alive) updateUnit(this, u, dt);
     updateBullets(this, dt);
     updateZones(this, dt);
@@ -378,7 +382,7 @@ export class World {
     if (!this.alarm) this.detect();
     if (this.dark && this.player.alive) this.updateBurn(dt);
     this.units = this.units.filter((u) => u.alive);
-    if (!this.cleared && this.enemies.length === 0) {
+    if (!this.cleared && this.enemies.length === 0 && !reinforcementsPending(this)) {
       this.cleared = true;
       if (this.hadEnemies) {
         this.events.push({ type: "roomCleared" });
@@ -402,7 +406,7 @@ export class World {
   /** Doors slam shut when the alarm sounds and open again once the room is cleared. */
   get doorsOpen(): boolean {
     // a trial keeps the doors shut between its waves too
-    if (this.trial?.active) return false;
+    if (this.trial?.active || this.reinforce?.hold?.active) return false;
     return !(this.alarm && this.enemies.length > 0);
   }
 
@@ -600,7 +604,7 @@ export class World {
 
   private detect(): void {
     for (const u of this.units) {
-      if (u.team === "minion" || !u.alive || u.st.stun > 0) continue;
+      if (u.team === "minion" || !u.alive || u.st.stun > 0 || u.hidden) continue;
       // the wild dead stand swaying until something else raises the alarm (or you walk into them)
       if (u.kind === "feral") {
         const touched = (this.player.alive && dist(u.pos, this.player.pos) < 95) || this.units.some((m) => m.team === "minion" && m.alive && dist(u.pos, m.pos) < 95);

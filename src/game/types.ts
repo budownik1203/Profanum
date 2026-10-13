@@ -227,6 +227,8 @@ export interface Unit {
   champT?: number;
   /** Raised by a summoner (his id): the summoner keeps only so many. */
   master?: number;
+  /** Lying in wait (an ambush): unseen and still until the necromancer comes close or the alarm sounds. */
+  hidden?: boolean;
   alive: boolean;
 }
 
@@ -563,6 +565,16 @@ export type GameEvent =
   | { type: "summon"; pos: Vec }
   /** A trial room: it began, a wave came in, it was won. */
   | { type: "trial"; stage: "start" | "wave" | "done"; wave: number; waves: number; pos: Vec }
+  /** Men walked in through a door (a wave, help from next door, the bell's answer, the hunt). */
+  | { type: "reinforcements"; pos: Vec; first: boolean }
+  /** An ambusher burst out of hiding. */
+  | { type: "ambushOut"; pos: Vec }
+  /** The last stand began, ran out, or was won. */
+  | { type: "hold"; stage: "start" | "over" | "won"; left: number }
+  /** The cultists' circle went dark with the last of them. */
+  | { type: "riteBroken"; pos: Vec }
+  /** The hunt reached this room. */
+  | { type: "hunt"; pos: Vec }
   /** A champion's gift showed itself on his death (a blast, a split, a ring of light). */
   | { type: "championDeath"; pos: Vec; champion: Champion }
   | { type: "explosion"; pos: Vec; radius: number }

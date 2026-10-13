@@ -289,6 +289,19 @@ export function playRun(seed: number, o: RunOptions = {}): RunReport {
   }
   rep.victory = run.victory;
   rep.dead = run.over && !run.victory;
+  if (rep.dead) {
+    // where and against whom: the room, its surprises, who was still standing
+    const node = run.floor.node;
+    const w = run.world;
+    const extra = [w.reinforce?.hold ? "last stand" : "", w.trial ? "trial" : "", w.reinforce?.rite ? "rite" : ""].filter(Boolean).join(", ");
+    const foes = w.enemies.map((u) => `${u.kind}${u.elite ? "*" : ""}${u.champion ? `(${u.champion})` : ""}`).join(" ");
+    const near = (q: { x: number; y: number }, r: number) => Math.hypot(q.x - w.player.pos.x, q.y - w.player.pos.y) < r;
+    const zones = w.zones.filter((z) => near(z.pos, z.radius + 60)).map((z) => `${z.kind}/${z.side}`).join(" ");
+    const shots = w.bullets.filter((b) => !b.fromPlayer && b.side !== "minion" && near(b.pos, 120)).map((b) => b.look).join(" ");
+    if (zones || shots) rep.problems.push(`  at death: zones [${zones}] bullets [${shots}] holy ${w.isHoly(w.player.pos)}`);
+    else rep.problems.push(`  at death: holy ${w.isHoly(w.player.pos)} exposure ${w.exposure.toFixed(1)}`);
+    rep.problems.unshift(`died in room ${node.id} (${node.type}${node.layout ? " " + node.layout : ""}${extra ? ", " + extra : ""}) on floor ${run.depth}: ${foes || "nobody left"}`);
+  }
   rep.depth = run.depth;
   rep.kills = run.stats.kills;
   rep.raised = run.stats.raised;

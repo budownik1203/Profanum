@@ -25,8 +25,8 @@ export const CONFIG = {
   /** Formations (tactics.ts): how often a room is drilled, and how the men keep their places. */
   tactics: {
     /** Chance a room's guards are drilled into a formation: base + per floor. */
-    drillBase: 0.3,
-    drillPerDepth: 0.08,
+    drillBase: 0.2,
+    drillPerDepth: 0.1,
     /** Chance a group without a sergeant gets one of its own promoted. */
     promoteBase: 0.35,
     promotePerDepth: 0.1,
@@ -61,8 +61,20 @@ export const CONFIG = {
 
   /** Elite guards (mini-bosses): tougher, bigger, they drop weapon remains. */
   /** Elites and champions in ordinary rooms (design: Elity): chance per room / per guard, base + per floor. */
-  elites: { roomBase: 0.12, roomPerDepth: 0.07, roomMax: 0.5, remainsChance: 0.35 },
+  elites: { roomBase: 0.06, roomPerDepth: 0.08, roomMax: 0.5, remainsChance: 0.35 },
   champions: { base: 0.04, perDepth: 0.03, max: 0.25, armoredTaken: 0.5, swift: 1.4, healEvery: 3, heal: 4, healRange: 220 },
+  /** Guards per combat room against the old count: +8% a floor (floor 1 about the same, the cathedral +40%). */
+  guardsPerDepth: 0.08,
+  /** More of them (reinforce.ts): chances base + per floor, capped; timings in seconds. */
+  reinforce: {
+    waveBase: 0.1, wavePerDepth: 0.08, waveMax: 0.6,
+    callBase: 0.1, callPerDepth: 0.06, callMax: 0.5, callDelay: [6, 10] as const,
+    ambushBase: 0.08, ambushPerDepth: 0.04, ambushMax: 0.3, ambushReveal: 230,
+    bellEvery: 4.5, bellMax: 4,
+    riteChance: 0.35, riteEvery: 5, riteMax: 5,
+    huntChance: 0.3, huntMax: 3, huntDelay: [5, 9] as const,
+    holdBase: 0.06, holdPerDepth: 0.025, holdTime: 40, holdEvery: 7.5,
+  },
   /** The trial room: waves until it's won, a pause between them. */
   trial: { pause: 1.4, spawnSafe: 380 },
 
@@ -142,8 +154,8 @@ export const CONFIG = {
     interactRange: 90,
     ammoDropChance: 0.12,
     keyDropChance: 0.03,
-    heartDropChance: 0.03,
-    roomRewardChance: 0.35, // a cleared room leaves something behind
+    heartDropChance: 0.05,
+    roomRewardChance: 0.55, // a cleared room leaves something behind (floors are longer now)
     ammoShare: 0.3, // a small ammo pickup refills this share of the current weapon
     chestBreakRuin: 0.5, // chance a smashed chest's contents are ruined
     mimicChance: 0.07,

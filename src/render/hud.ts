@@ -200,6 +200,14 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
     if (w.isLit(boss.pos, false)) tx.text("☀", bx + bw - 4, by2 - 30, { size: 22, color: 0xf4e2a8, align: "right" }, 1, 0);
   }
 
+  // ---------------------------------------------------------------- the last stand's clock
+  const hold = w.reinforce?.hold;
+  if (hold?.active) {
+    const left = Math.max(0, Math.ceil(hold.left));
+    frame(g, VIEW_W / 2 - 130, boss ? 96 : 20, 260, 56);
+    tx.text(t("hud.hold", { n: left }), VIEW_W / 2, (boss ? 96 : 20) + 28, { size: 26, font: "display", align: "center", color: left <= 10 ? PAL.ember : PAL.hudText }, 0.5, 0.5);
+  }
+
   // ---------------------------------------------------------------- banners and the narrator
   if (info.banner && info.banner.alpha > 0) {
     tx.text(info.banner.text, VIEW_W / 2, VIEW_H * 0.3, { size: 54, font: "display", align: "center", stroke: true }, 0.5, 0.5, info.banner.alpha);

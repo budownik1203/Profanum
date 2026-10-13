@@ -13,6 +13,7 @@ import {
   templateByName,
 } from "./rooms.js";
 import { setupBossArena } from "./bosses.js";
+import { planHunt, planRoom } from "./reinforce.js";
 import type { GameEvent, InputState, Player, Side } from "./types.js";
 import { World } from "./world.js";
 import { pick } from "./shared.js";
@@ -36,6 +37,8 @@ export interface RoomNode {
   alarmed: boolean;
   /** The catacombs: not on the map until found. */
   hidden: boolean;
+  /** The hunt already looked for him here. */
+  hunted?: boolean;
 }
 
 export interface FloorOptions {
@@ -67,6 +70,9 @@ export class Floor {
   readonly depth: number;
   /** The saint's finger showed the whole floor. */
   revealed = false;
+  /** After an alarm the floor's hunters are about (reinforce.ts). */
+  hunt = false;
+  private huntCount = 0;
   /** The boss of this floor, drawn from its pool of three. */
   readonly boss: UnitKind;
   /** A secret floor's definition (null on the ordinary floors). */
@@ -309,8 +315,18 @@ export class Floor {
         break;
       default: {
         const t = template!;
-        const guards = Math.min(t.slots.length, 3 + def.extra + Math.floor(node.depth / 2));
+        const c = CONFIG.reinforce;
+        // now and then a combat room is a last stand: empty, until they come in from every door
+        if (node.type === "combat" && this.depth >= 2 && !sec && rng() < Math.min(0.2, c.holdBase + c.holdPerDepth * (this.depth - 1))) {
+          applyTemplate(w, t, this.depth, 0, rng, { mirror: node.mirror });
+          w.alarm = false;
+          planRoom(w, def, rng, { hold: true });
+          break;
+        }
+        // a third more guards than the template's places would hold at this depth (extra ones stand beside)
+        const guards = Math.round((3 + def.extra + Math.floor(node.depth / 2)) * (1 + CONFIG.guardsPerDepth * this.depth));
         applyTemplate(w, t, sec ?? this.depth, guards, rng, { mirror: node.mirror });
+        planRoom(w, def, rng);
       }
     }
     // in ordinary rooms a doorway may open off the middle of its wall (special rooms keep theirs
@@ -362,6 +378,8 @@ export class Floor {
     const w = this.world;
     w.update(dt, input);
     const events = [...w.events];
+    // an alarm anywhere sets the floor's hunters loose (they come into rooms he walks into later)
+    if (!this.hunt && events.some((e) => e.type === "alarm") && this.depth >= 2) this.hunt = true;
     const exit = events.find((e) => e.type === "exit");
     if (exit && exit.type === "exit") events.push(...this.travel(exit.door.side, exit.door.to));
     if (events.some((e) => e.type === "relicUse" && e.relic === "finger")) {
@@ -384,6 +402,16 @@ export class Floor {
     const node = this.rooms[to];
     if (!node.world) node.world = this.build(node);
     const w = node.world;
+    // the hunt finds him in some of the rooms he walks into (once per room)
+    const busy = !!w.reinforce && (w.reinforce.waves.length > 0 || !!w.reinforce.call || !!w.reinforce.hold);
+    if (this.hunt && !node.hunted && !busy && this.huntCount < CONFIG.reinforce.huntMax && (node.type === "combat" || node.type === "treasure" || node.type === "start")) {
+      node.hunted = true;
+      const hr = makeRng(this.seed * 31 + node.id * 977 + this.huntCount);
+      if (hr() < CONFIG.reinforce.huntChance) {
+        this.huntCount += 1;
+        planHunt(w, this.secret ?? floorDef(this.depth), hr);
+      }
+    }
     const arriveSide = OPPOSITE[side];
     w.player = this.player;
     const at = w.placeAtDoor(arriveSide);

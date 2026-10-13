@@ -6,6 +6,7 @@ import { Floor, OPPOSITE } from "../src/game/floor.js";
 import { idleInput, type Side } from "../src/game/world.js";
 import { giveItem, giveWeapon } from "../src/game/stats.js";
 import { DT } from "./helpers.js";
+import { damageUnit } from "../src/game/combat.js";
 
 test("the stairs after a boss lead down, floor after floor, to the sanctum", () => {
   const run = new Run({ seed: 5 });
@@ -23,6 +24,9 @@ test("the stairs after a boss lead down, floor after floor, to the sanctum", () 
       b.boss!.intro = 0;
       run.world.player.pos = { x: b.pos.x, y: b.pos.y + 200 };
       for (let t = 0; t < 3 && b.alive; t += DT) run.update(DT, { ...idleInput(b.pos), shoot: true });
+      // some bosses hide behind something (a strongbox, a shield): finish him by hand then
+      if (b.alive) damageUnit(run.world, b, 9999, { x: 0, y: 1 }, { fromPlayer: true });
+      for (let t = 0; t < 0.2; t += DT) run.update(DT, idleInput());
       assert.equal(b.alive, false, `boss of floor ${i + 1} died`);
       const stairs = run.world.interactables.find((x) => x.kind === "stairs")!;
       assert.ok(stairs, "stairs appeared");

@@ -247,7 +247,7 @@ export function onRoomCleared(w: World): void {
   }
   if (w.roomType === "combat" && w.rng() < CONFIG.loot.roomRewardChance) {
     const r = w.rng();
-    const kind: PickupKind = r < 0.35 ? "ammoBox" : r < 0.6 ? "halfHeart" : r < 0.8 ? "gold" : r < 0.92 ? "key" : "heart";
+    const kind: PickupKind = r < 0.3 ? "ammoBox" : r < 0.62 ? "halfHeart" : r < 0.8 ? "gold" : r < 0.9 ? "key" : "heart";
     drop(w, kind, add(p.pos, vec(0, -60)), kind === "gold" ? 5 : 1);
   }
 }

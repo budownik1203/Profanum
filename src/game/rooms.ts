@@ -182,7 +182,14 @@ export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorD
   const drill = drillFor(def, def.depth, rng);
   const drilled = (role: string): UnitKind | undefined =>
     !drill ? undefined : role === "r" ? drill.ranged : role === "m" || role === "p" ? drill.melee : role === "s" ? drill.special : undefined;
-  t.slots.slice(0, guardCount).forEach(([role, x0, y, route]) => {
+  // more guards than places: the extra ones stand beside the first places (no patrols for them)
+  const slots = t.slots.slice(0, guardCount);
+  for (let i = 0; slots.length < guardCount && i < t.slots.length * 2; i++) {
+    const [role, x, y] = t.slots[i % t.slots.length];
+    if (role === "l" || role === "p") continue;
+    slots.push([role, x + (i % 2 ? 70 : -70), y + 55, undefined]);
+  }
+  slots.forEach(([role, x0, y, route]) => {
     const pos = vec(mx(x0), y);
     const kind = drilled(role) ?? kindFor(def, role, rng);
     const aware = t.light ? {} : { state: (role === "p" ? "patrol" : "idle") as "patrol" | "idle", route: route?.map(([rx, ry]) => vec(mx(rx), ry)) };
