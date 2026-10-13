@@ -35,6 +35,7 @@ interface Look {
 
 const LOOKS: Partial<Record<UnitKind, Look>> = {
   halberdier: { coat: 0x6a2c1e, coatMid: 0x3e1912, skin: 0x8a6e58, head: "morion", gear: "halberd" },
+  paviser: { coat: 0x5c3c26, coatMid: 0x382416, skin: 0x8a6e58, head: "morion", gear: "sword", trim: 0x6a2c1e, bulk: 1.06 },
   arquebusier: { coat: 0x3a4048, coatMid: 0x22262c, skin: 0x8a6e58, head: "widebrim", gear: "arquebus" },
   sergeant: { coat: 0x7a3022, coatMid: 0x451a12, skin: 0x8a6e58, head: "plumed", gear: "pistols", trim: 0xa8823e, bulk: 1.08 },
   peasant: { coat: 0x5a4a32, coatMid: 0x3a2e1e, skin: 0x8c705a, head: "straw", gear: "pitchfork", hunch: 0.15 },
@@ -142,6 +143,9 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   drawHead(g, glow, look.head, x + 2 * face * s + hunch * 1.2, top + 12 * s, s, face, skin, minion, flash, look);
   drawGear(g, glow, look.gear, e, x, top, s, face, minion, w);
   if (look.shield) drawShield(g, e, x, top, s, minion);
+  // the paviser carries his great shield until he plants it
+  if (e.kind === "paviser" && !e.goal) drawPavise(g, e, x, top, s, minion);
+  if (e.leader && !minion) drawLeaderMark(g, e, x + 2 * face * s + hunch * 1.2, top + 12 * s, s, face, look.head);
 
   if (minion) {
     glow.circle(x + 6 * face * s + hunch * 1.2, top + 12 * s, 8 * s).fill({ color: PAL.ember, alpha: 0.22 });
@@ -365,6 +369,39 @@ function drawShield(g: Graphics, e: Unit, x: number, top: number, s: number, min
     .fill(minion ? PAL.minionMid : 0xd8d0c0)
     .stroke({ width: 4, color: PAL.ink, join: "round" });
   if (!minion) g.circle(cx, cy, 5 * s).fill(0xb8321e);
+}
+
+/** The great shield carried before him, painted with the city's arms. */
+function drawPavise(g: Graphics, e: Unit, x: number, top: number, s: number, minion: boolean): void {
+  const d = e.dir;
+  const cx = x + d.x * 24 * s;
+  const cy = top + 46 * s + d.y * 14 * s;
+  const w = 26 * s;
+  const h = 46 * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, 5 * s).fill(minion ? PAL.minionMid : 0x8a6a44).stroke({ width: 4, color: PAL.ink });
+  if (minion) return;
+  g.rect(cx - w / 2 + 3 * s, cy - h / 2 + 3 * s, w - 6 * s, 12 * s).fill(0x6a2c1e);
+  g.poly([cx, cy - 4 * s, cx + 7 * s, cy + 4 * s, cx, cy + 14 * s, cx - 7 * s, cy + 4 * s]).fill(0xd8c8a0).stroke({ width: 2, color: PAL.ink });
+}
+
+/**
+ * A leader's mark: a red-and-white plume on the hat (a sergeant has his own), or the processional
+ * cross a monk carries at the head of the Church's column.
+ */
+function drawLeaderMark(g: Graphics, e: Unit, hx: number, hy: number, s: number, face: number, head: Head): void {
+  if (e.def.faction === "church") {
+    const sx = hx - face * 18 * s;
+    g.moveTo(sx, hy + 50 * s).lineTo(sx, hy - 46 * s).stroke({ width: 7 * s, color: PAL.ink, cap: "round" });
+    g.moveTo(sx, hy + 50 * s).lineTo(sx, hy - 46 * s).stroke({ width: 3.5 * s, color: 0xa8823e, cap: "round" });
+    g.rect(sx - 11 * s, hy - 36 * s, 22 * s, 5 * s).fill(0xd8b04a).stroke({ width: 2, color: PAL.ink });
+    g.rect(sx - 2.5 * s, hy - 50 * s, 5 * s, 26 * s).fill(0xd8b04a).stroke({ width: 2, color: PAL.ink });
+    return;
+  }
+  if (head === "plumed") return;
+  const top = head === "capotain" ? hy - 30 * s : head === "widebrim" ? hy - 22 * s : head === "inqhat" ? hy - 36 * s : hy - 16 * s;
+  const bx = hx - face * 4 * s;
+  g.poly([bx, top + 4 * s, bx - face * 6 * s, top - 22 * s, bx - face * 16 * s, top - 30 * s, bx - face * 8 * s, top - 8 * s]).fill(0xb8281a).stroke({ width: 3, color: PAL.ink });
+  g.poly([bx - face * 4 * s, top - 6 * s, bx - face * 10 * s, top - 24 * s, bx - face * 14 * s, top - 22 * s]).fill(0xf0e6d0);
 }
 
 function drawStatus(g: Graphics, glow: Graphics, e: Unit, x: number, top: number, s: number, w: World): void {

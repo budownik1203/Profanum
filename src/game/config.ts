@@ -20,7 +20,38 @@ export const CONFIG = {
   crit: { mul: 1.75 },
 
   /** Pews, tables and coffins topple into cover; tombs and crates always stop bullets; barrels blow up. */
-  cover: { hp: 14, stoneHp: 30, barrelHp: 3, flipRange: 70 },
+  cover: { hp: 14, stoneHp: 30, barrelHp: 3, flipRange: 70, paviseHp: 22 },
+
+  /** Formations (tactics.ts): how often a room is drilled, and how the men keep their places. */
+  tactics: {
+    /** Chance a room's guards are drilled into a formation: base + per floor. */
+    drillBase: 0.3,
+    drillPerDepth: 0.08,
+    /** Chance a group without a sergeant gets one of its own promoted. */
+    promoteBase: 0.35,
+    promotePerDepth: 0.1,
+    /** Line: spacing of the men, distance between the ranks, aim time of a volley. */
+    lineGap: 62,
+    rankGap: 58,
+    volleyAim: 0.8,
+    /** Seconds the line waits for stragglers before it fires anyway. */
+    formTime: 2.2,
+    /** Wedge: walking pace while closing in, distance from which it charges. */
+    wedgePace: 0.8,
+    wedgeCharge: 270,
+    wedgeChargeTime: 0.6,
+    /** Procession: pace, the holy light at its head (base + per marcher), where it breaks up. */
+    processionPace: 70,
+    processionLight: 120,
+    processionLightPer: 40,
+    processionBreak: 240,
+    /** Flankers swing this far round the side before they strike. */
+    flankRadius: 240,
+    /** Burning bodies: how far a churchman looks, how long it takes, how close the necromancer may be. */
+    burnLook: 360,
+    burnTime: 1.1,
+    burnSafe: 230,
+  },
   barrel: { blastRadius: 130, blastDamage: 12, fireRadius: 90, fireTime: 6, oilRadius: 130 },
 
   enemyBulletDamage: 1, // halves

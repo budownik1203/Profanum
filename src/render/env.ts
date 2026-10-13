@@ -293,6 +293,25 @@ export function drawCover(g: Graphics, c: Cover, t: number): void {
       g.rect(x - 6, y + h - 8, w + 12, 12).fill(0x4a484c).stroke({ width: 4, color: PAL.ink });
       break;
     }
+    case "pavise": {
+      // a great shield driven into the floor: planks, an iron rim, the city's arms, a prop behind
+      const lift = 40;
+      const tall = h > w;
+      g.rect(x - 4, y + h - 6, w + 8, 10).fill({ color: PAL.ink, alpha: 0.5 });
+      g.roundRect(x, y - lift, w, h + lift, 6).fill(0x8a6a44).stroke(ink);
+      if (tall) for (let i = 1; i < 3; i++) g.moveTo(x + 3, y - lift + ((h + lift) * i) / 3).lineTo(x + w - 3, y - lift + ((h + lift) * i) / 3).stroke({ width: 2, color: 0x5a4028 });
+      else for (let i = 1; i < 4; i++) g.moveTo(x + (w * i) / 4, y - lift + 4).lineTo(x + (w * i) / 4, y + h - 4).stroke({ width: 2, color: 0x5a4028 });
+      g.rect(x + 3, y - lift + 3, w - 6, Math.min(16, (h + lift) * 0.22)).fill(0x6a2c1e);
+      const cx = x + w / 2;
+      const cy = y + (h - lift) / 2 + 4;
+      const r = Math.min(w, h + lift) * 0.28;
+      g.poly([cx, cy - r, cx + r * 0.8, cy, cx, cy + r * 1.1, cx - r * 0.8, cy]).fill(0xd8c8a0).stroke({ width: 2, color: PAL.ink });
+      // cracks as it takes hits
+      const hurt = 1 - c.hp / CONFIG.cover.paviseHp;
+      if (hurt > 0.3) g.moveTo(x + w * 0.3, y - lift + 6).lineTo(x + w * 0.5, cy).lineTo(x + w * 0.4, y + h - 6).stroke({ width: 3, color: PAL.ink });
+      if (hurt > 0.65) g.moveTo(x + w * 0.75, y - lift + 10).lineTo(x + w * 0.6, cy + 10).stroke({ width: 3, color: PAL.ink });
+      break;
+    }
     case "crate": {
       const lift = 18;
       g.rect(x, y - lift, w, h + lift).fill(0x6a5232).stroke(ink);

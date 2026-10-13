@@ -16,6 +16,7 @@ import type { LightKind, Side } from "./types.js";
 import type { World } from "./world.js";
 import { addChest, placePickup, stockShop } from "./loot.js";
 import { pick } from "./shared.js";
+import { drillFor, formSquads } from "./tactics.js";
 
 export type RoomType = "start" | "combat" | "treasure" | "shop" | "altar" | "miniboss" | "boss" | "secret" | "final" | "guardian";
 
@@ -177,10 +178,14 @@ export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorD
   themedLights(w, def, t.lights, mirror);
   let bellringer = false;
   let lamplighter = false;
+  // some garrisons are drilled: their places go to the men of one formation (tactics.ts)
+  const drill = opts.elite ? null : drillFor(def, def.depth, rng);
+  const drilled = (role: string): UnitKind | undefined =>
+    !drill ? undefined : role === "r" ? drill.ranged : role === "m" || role === "p" ? drill.melee : role === "s" ? drill.special : undefined;
   t.slots.slice(0, guardCount).forEach(([role, x0, y, route], i) => {
     const pos = vec(mx(x0), y);
     const elite = (opts.elite ?? false) && i === 0;
-    const kind = elite ? pick(rng, def.elite) : kindFor(def, role, rng);
+    const kind = elite ? pick(rng, def.elite) : drilled(role) ?? kindFor(def, role, rng);
     const aware = t.light ? {} : { state: (role === "p" ? "patrol" : "idle") as "patrol" | "idle", route: route?.map(([rx, ry]) => vec(mx(rx), ry)) };
     w.spawn(kind, pos, undefined, {
       ...aware,
@@ -194,6 +199,7 @@ export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorD
     if (kind === "sergeant") w.spawn("dog", vec(pos.x + 50, pos.y + 30), undefined, t.light ? {} : { state: "idle" });
   });
   if (bellringer && def.bells) w.addInteractable("bell", vec(mx(Math.round(w.room.w * 0.25)), 120), { radius: 60 });
+  formSquads(w, rng, def.depth, drill);
 }
 
 /** The quiet room each floor starts in (the mass grave on the cemetery). */

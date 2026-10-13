@@ -301,6 +301,21 @@ export class GameRenderer {
         case "command":
           for (let i = 0; i < 12; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-120, 120), rnd(0.3, 0.6), rnd(1.5, 3), PAL.ember, "spark");
           break;
+        case "squadOrder":
+          this.floatText(e.pos, t(`float.order.${e.order}`), e.order === "chant" ? PAL.holy : PAL.telegraph, 30, 1.2);
+          break;
+        case "squadBroken":
+          this.floatText(e.pos, t("float.squadBroken"), PAL.hudText, 26, 1.3);
+          break;
+        case "corpseBurned":
+          for (let i = 0; i < 16; i++) this.spawn(e.pos, rnd(-60, 60), rnd(-170, -50), rnd(0.5, 1.1), rnd(6, 13), PAL.smoke, "smoke");
+          for (let i = 0; i < 14; i++) this.spawn(e.pos, rnd(-90, 90), rnd(-200, -40), rnd(0.3, 0.7), rnd(1.5, 3), PAL.ember, "spark");
+          this.floatText(e.pos, t("float.corpseBurned"), PAL.ember, 24, 1.2);
+          break;
+        case "pavise":
+          for (let i = 0; i < 10; i++) this.spawn(e.pos, rnd(-90, 90), rnd(-40, 20), rnd(0.3, 0.6), rnd(4, 8), PAL.smoke, "smoke");
+          this.addShake(3);
+          break;
         case "exorcism":
           if (!e.warn) for (let i = 0; i < 40; i++) {
             const a = (i / 40) * Math.PI * 2;

@@ -13,7 +13,7 @@ import { type Rect, type Vec, add, angleOf, circleHitsRect, clamp, dist, fromAng
 import { UNITS, teamOf, type UnitKind } from "./data/units.js";
 import type {
   Bullet, Chest, Corpse, Cover, CoverKind, Door, GameEvent, InputState, Interactable, Light, LightKind, Pickup,
-  Player, Side, Soul, Team, Unit, Zone,
+  Player, Side, Soul, Squad, Team, Unit, Zone,
 } from "./types.js";
 import { makePlayer } from "./stats.js";
 import { BARRELS, FLIPPABLE, blocksBullets, nextId } from "./shared.js";
@@ -23,6 +23,7 @@ import { updateShooting } from "./shooting.js";
 import { updateLights } from "./lighting.js";
 import { interact, raisableCorpse as findRaisable, updatePickups, onRoomCleared } from "./loot.js";
 import { useRelic, useSpecial } from "./relics.js";
+import { updateSquads } from "./tactics.js";
 
 export type * from "./types.js";
 
@@ -71,6 +72,8 @@ export class World {
   covers: Cover[] = [];
   lights: Light[] = [];
   zones: Zone[] = [];
+  /** Formations of the guards in this room (tactics.ts). */
+  squads: Squad[] = [];
   pickups: Pickup[] = [];
   chests: Chest[] = [];
   interactables: Interactable[] = [];
@@ -147,7 +150,7 @@ export class World {
 
   // ---------------------------------------------------------------- building the room
   addCover(x: number, y: number, w: number, h: number, kind: CoverKind = "pew"): Cover {
-    const hp = kind === "pillar" || kind === "organ" ? Infinity : BARRELS.includes(kind) ? CONFIG.cover.barrelHp : kind === "tomb" || kind === "crate" ? CONFIG.cover.stoneHp : CONFIG.cover.hp;
+    const hp = kind === "pillar" || kind === "organ" ? Infinity : BARRELS.includes(kind) ? CONFIG.cover.barrelHp : kind === "tomb" || kind === "crate" ? CONFIG.cover.stoneHp : kind === "pavise" ? CONFIG.cover.paviseHp : CONFIG.cover.hp;
     const c: Cover = { id: nextId(), x, y, w, h, kind, flipped: false, hp, broken: false };
     this.covers.push(c);
     return c;
@@ -361,6 +364,7 @@ export class World {
       if (this.order.time <= 0) this.order = null;
     }
     if (this.player.alive) this.updatePlayer(dt, input);
+    if (this.squads.length) updateSquads(this, dt);
     for (const u of this.units) if (u.alive) updateUnit(this, u, dt);
     updateBullets(this, dt);
     updateZones(this, dt);
@@ -591,6 +595,12 @@ export class World {
   private detect(): void {
     for (const u of this.units) {
       if (u.team === "minion" || !u.alive || u.st.stun > 0) continue;
+      // the wild dead stand swaying until something else raises the alarm (or you walk into them)
+      if (u.kind === "feral") {
+        const touched = (this.player.alive && dist(u.pos, this.player.pos) < 95) || this.units.some((m) => m.team === "minion" && m.alive && dist(u.pos, m.pos) < 95);
+        if (touched) return this.raiseAlarm(u);
+        continue;
+      }
       const seesPlayer = this.player.alive && this.sees(u, this.player.pos);
       const seesMinion = !seesPlayer && this.units.some((m) => m.team === "minion" && m.alive && this.sees(u, m.pos));
       if (seesPlayer || seesMinion) {

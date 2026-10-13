@@ -10,6 +10,9 @@ import type { World } from "./world.js";
 import { addZone, damageUnit, fan, hurtPlayer, killUnit, lob, ring, spawnBullet } from "./combat.js";
 import { tendLights } from "./lighting.js";
 import { updateBoss } from "./bosses.js";
+import { chargeDir, flankMove, holdFormation, squadOf, tendPyre } from "./tactics.js";
+import { FLIPPABLE } from "./shared.js";
+import { circleHitsRect } from "./math.js";
 
 type Target = { pos: Vec; unit?: Unit; player?: true };
 type Behaviour = (w: World, u: Unit, t: Target, dt: number) => Vec;
@@ -59,6 +62,12 @@ export function updateUnit(w: World, u: Unit, dt: number): void {
       flee(w, u, dt);
       return;
     }
+  }
+  // churchmen and torchbearers burn the bodies the necromancer could raise
+  const pyre = tendPyre(w, u, dt);
+  if (pyre) {
+    w.moveUnit(u, pyre, dt);
+    return;
   }
   // a raised monk tends the dead around him (design doc: Sługi), fight or no fight
   if (u.team === "minion" && u.kind === "monk" && u.cooldown <= 0) tendTheDead(w, u);
@@ -206,23 +215,28 @@ const charger: Behaviour = (w, u, t) => {
   const dirT = norm(toT);
   switch (u.state) {
     case "follow":
-    case "approach":
+    case "approach": {
       u.state = "approach";
       u.dir = dirT;
+      // in a wedge: keep your place until the leader gives the word (unless the enemy is on top of you)
+      const hold = len(toT) > 110 ? holdFormation(w, u) : null;
+      if (hold) return hold;
       if (len(toT) < (d.engageRange ?? 190)) {
         u.state = "windup";
         u.timer = d.windup ?? 0.5;
         telegraph(w, u);
       }
       return scale(dirT, d.speed);
+    }
     case "windup":
-      u.dir = dirT; // keeps tracking until the charge locks in
+      u.dir = chargeDir(w, u) ?? dirT; // keeps tracking until the charge locks in (a wedge pushes one way)
       if (u.timer <= 0) {
         u.state = "charge";
         u.timer = d.chargeTime ?? 0.4;
       }
       return vec();
     case "charge": {
+      smashCovers(w, u);
       const hit = chargeContact(w, u);
       if (hit || u.timer <= 0) {
         u.state = "recover";
@@ -238,6 +252,17 @@ const charger: Behaviour = (w, u, t) => {
       return vec();
   }
 };
+
+/** A halberd charge goes through pews, tables and coffins: they splinter. */
+function smashCovers(w: World, u: Unit): void {
+  if (u.kind !== "halberdier" || u.team === "minion") return;
+  for (const c of w.covers) {
+    if (c.broken || !FLIPPABLE.includes(c.kind) || !circleHitsRect(u.pos, u.radius + 8, c)) continue;
+    c.broken = true;
+    c.hp = 0;
+    w.events.push({ type: "coverBreak", cover: c.id, pos: vec(c.x + c.w / 2, c.y + c.h / 2), kind: c.kind });
+  }
+}
 
 /** A charging unit hits the first opponent it touches. */
 function chargeContact(w: World, u: Unit): boolean {
@@ -270,8 +295,15 @@ const gunner: Behaviour = (w, u, t) => {
       // hold the preferred range and strafe around the target
       const radial = dd > range + 40 ? 1 : dd < range - 40 ? -1 : 0;
       const side = { x: -dirT.y * u.strafe, y: dirT.x * u.strafe };
-      const vel = scale(norm(add(scale(dirT, radial), scale(side, 0.8))), d.speed);
+      let vel = scale(norm(add(scale(dirT, radial), scale(side, 0.8))), d.speed);
       u.dir = dirT;
+      // in a formation: stand in your place; a line fires only on the word (squads in tactics.ts),
+      // marchers of a procession shoot as they walk. A man left waiting too long fights on his own.
+      const hold = holdFormation(w, u);
+      if (hold) {
+        if (squadOf(w, u)?.kind !== "procession" && u.timer > -6) return hold;
+        vel = hold;
+      }
       if (u.timer <= 0) {
         u.state = "aim";
         u.timer = d.aim ?? 0.6;
@@ -301,7 +333,8 @@ const gunner: Behaviour = (w, u, t) => {
       }
       return vec();
     case "reload": {
-      const vel = scale({ x: -dirT.y * u.strafe, y: dirT.x * u.strafe }, d.speed * 0.4);
+      // reloading in the line: step back into your rank (the countermarch)
+      const vel = holdFormation(w, u, 0.6) ?? scale({ x: -dirT.y * u.strafe, y: dirT.x * u.strafe }, d.speed * 0.4);
       if (u.timer <= 0) {
         u.state = "reposition";
         u.timer = d.reposition ? w.range(d.reposition) : 1.2;
@@ -328,8 +361,11 @@ const rusher: Behaviour = (w, u, t) => {
   }
   switch (u.state) {
     case "follow":
-    case "approach":
+    case "approach": {
       u.state = "approach";
+      // dogs and the mob swing round the side while the squad holds the front
+      const round = flankMove(w, u, t.pos);
+      if (round) return round;
       u.dir = dirT;
       if (dd < reach) {
         u.state = "windup";
@@ -337,6 +373,7 @@ const rusher: Behaviour = (w, u, t) => {
         telegraph(w, u);
       }
       return scale(dirT, d.speed);
+    }
     case "windup":
       u.dir = dirT;
       if (u.timer <= 0) {
@@ -443,15 +480,19 @@ const frenzy: Behaviour = (w, u, t) => {
   const fury = 1 + (1 - Math.max(0, u.hp) / u.maxHp) * 0.8;
   switch (u.state) {
     case "follow":
-    case "approach":
+    case "approach": {
       u.state = "approach";
       u.dir = dirT;
+      // flagellants walk in the procession, lashing themselves, until the enemy comes near
+      const hold = dd > 170 ? holdFormation(w, u) : null;
+      if (hold) return hold;
       if (dd < (d.reach ?? 110)) {
         u.state = "windup";
         u.timer = (d.windup ?? 0.35) / fury;
         telegraph(w, u);
       }
       return scale(dirT, d.speed * fury);
+    }
     case "windup":
       u.dir = dirT;
       if (u.timer <= 0) {
@@ -645,7 +686,46 @@ const brute: Behaviour = (w, u, t) => {
   }
 };
 
+/**
+ * The paviser carries a great shield before the musket line and plants it in the ground: a wall the
+ * muskets fire past. Then he stays behind it and strikes whoever comes round. A broken pavise is
+ * replaced after a while. Without a line he fights like any other man with a short sword.
+ */
+const paviser: Behaviour = (w, u, t, dt) => {
+  const d = u.def;
+  const sq = squadOf(w, u);
+  const planted = u.goal ? w.covers.find((c) => c.kind === "pavise" && !c.broken && Math.abs(c.x + c.w / 2 - u.goal!.x) < 2 && Math.abs(c.y + c.h / 2 - u.goal!.y) < 2) : undefined;
+  if (!planted) u.goal = undefined;
+  if (sq && !planted && u.cooldown <= 0 && u.tac?.slot && (u.state === "approach" || u.state === "follow")) {
+    const to = sub(u.tac.slot, u.pos);
+    if (len(to) > 26) {
+      u.dir = norm(to);
+      return scale(u.dir, d.speed);
+    }
+    // set the shield across the way to the enemy
+    const face = sq.dir ?? norm(sub(t.pos, u.pos));
+    const across = Math.abs(face.x) > Math.abs(face.y);
+    const at = add(u.pos, scale(face, 34));
+    const [cw, ch] = across ? [22, 92] : [92, 22];
+    w.addCover(at.x - cw / 2, at.y - ch / 2, cw, ch, "pavise");
+    u.goal = at;
+    u.cooldown = d.special ?? 9;
+    w.events.push({ type: "pavise", pos: { ...at } });
+    return vec();
+  }
+  // behind the shield: wait there unless the enemy comes close
+  if (planted && dist(t.pos, u.pos) > 170 && (u.state === "approach" || u.state === "follow")) {
+    const face = norm(sub(t.pos, u.goal!));
+    const behind = sub(u.goal!, scale(face, 46));
+    const to = sub(behind, u.pos);
+    u.dir = face;
+    return len(to) > 10 ? scale(norm(to), d.speed) : vec();
+  }
+  return rusher(w, u, t, dt);
+};
+
 const BEHAVIOURS: Record<Exclude<Unit["def"]["ai"], "boss">, Behaviour> = {
+  paviser,
   charger,
   gunner,
   rusher,

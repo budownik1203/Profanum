@@ -689,6 +689,34 @@ export class GameAudio {
         case "special":
           this.whoosh(0, 0.6);
           break;
+        // a squad leader's word: a drum stroke for "Fire!", a horn for the charge, a low bell for the chant
+        case "squadOrder": {
+          const [pan, vol] = at(e.pos);
+          if (!this.allow(`order-${e.order}`, 0.4)) break;
+          if (e.order === "volley") {
+            this.boom(pan, vol * 0.35, 0.25);
+            this.tone(this.out(pan, vol * 0.25, 0.2), "square", this.ctx.currentTime, 140, 95, 0.005, 0.12, 0.3);
+          } else if (e.order === "charge") this.horn(pan, vol * 0.7);
+          else this.bell(pan, vol * 0.5, midi(45));
+          break;
+        }
+        case "squadBroken": {
+          const [pan, vol] = at(e.pos);
+          this.scrape(pan, vol * 0.5);
+          break;
+        }
+        case "corpseBurned": {
+          const [pan, vol] = at(e.pos);
+          this.whoosh(pan, vol * 0.6);
+          this.sizzle(pan, vol * 0.5);
+          break;
+        }
+        case "pavise": {
+          const [pan, vol] = at(e.pos);
+          this.boom(pan, vol * 0.3, 0.2);
+          this.clank(pan, vol * 0.4);
+          break;
+        }
         default:
           break;
       }

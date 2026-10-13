@@ -7,7 +7,7 @@ import type { BulletLook } from "../types.js";
 
 export type UnitKind =
   // City guard
-  | "halberdier" | "arquebusier" | "sergeant" | "dog"
+  | "halberdier" | "arquebusier" | "sergeant" | "dog" | "paviser"
   // the mob
   | "peasant" | "torchbearer" | "witchhunter" | "gravedigger"
   // occult rivals (fight everyone)
@@ -39,6 +39,7 @@ export type AiKind =
   | "caster" // homing orbs, blinks away (cultist)
   | "bellringer" // runs to the bell when the alarm sounds
   | "brute" // stitched abomination: slow, heavy slams
+  | "paviser" // carries a great shield and plants it before the musket line
   | "boss";
 
 export interface ShotDef {
@@ -120,6 +121,11 @@ export const UNITS: Record<UnitKind, UnitDef> = {
     range: 360, reposition: [0.8, 1.4], aim: 0.6, reload: 2.0,
     shot: { count: 3, spread: 0.44, speed: 380, radius: 9, look: "ball" },
     gold: [3, 5], raisable: true, size: 1.08,
+  }),
+  paviser: D({
+    kind: "paviser", faction: "guard", ai: "paviser", hp: 12, radius: 23, speed: 125,
+    reach: 58, windup: 0.4, recover: 0.8, melee: 3, special: 9,
+    gold: [2, 4], raisable: true, size: 1.04,
   }),
   dog: D({
     kind: "dog", faction: "beast", ai: "rusher", hp: 4, radius: 16, speed: 270,

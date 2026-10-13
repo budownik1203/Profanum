@@ -215,7 +215,45 @@ export interface Unit {
   stitched: number;
   /** Bosses keep their script state here. */
   boss?: BossState;
+  /** Leads a formation (a sergeant, or a soldier promoted for the fight: a plume on his hat). */
+  leader?: boolean;
+  /** His place in a formation, if he serves in one. */
+  tac?: Tactic;
+  /** Walking to a corpse to burn it (its id), and how long the burning still takes. */
+  pyre?: { corpse: number; t: number };
   alive: boolean;
+}
+
+/** A soldier's part in his squad (see tactics.ts). */
+export interface Tactic {
+  squad: number;
+  /** Where the formation wants him to stand right now. */
+  slot?: Vec;
+  /** Line: his rank (0 or 1; the ranks fire in turn and swap places). */
+  rank?: number;
+  /** Flankers go round the side (-1 / +1) before they strike; 0 once there. */
+  flank?: number;
+}
+
+export type SquadKind = "line" | "wedge" | "procession";
+
+/** A formation: a leader and the men who follow his word (design: Taktyka wrogów). */
+export interface Squad {
+  id: number;
+  kind: SquadKind;
+  leader: number;
+  members: number[];
+  phase: "form" | "volley" | "reload" | "advance" | "charge" | "recover";
+  timer: number;
+  /** Line: the rank that fires next (countermarch). */
+  rank: number;
+  /** Where the line stands and which way it faces (smoothed, so the men don't dance). */
+  center?: Vec;
+  dir?: Vec;
+  /** Procession: the holy light carried at its head. */
+  light?: number;
+  /** Line: seconds from one volley to the next. */
+  wait?: number;
 }
 
 export interface BossState {
@@ -459,7 +497,7 @@ export interface Cover {
   broken: boolean;
 }
 
-export type CoverKind = "pew" | "table" | "coffin" | "cart" | "stall" | "tomb" | "pillar" | "crate" | "powder" | "oil" | "shelf" | "organ";
+export type CoverKind = "pew" | "table" | "coffin" | "cart" | "stall" | "tomb" | "pillar" | "crate" | "powder" | "oil" | "shelf" | "organ" | "pavise";
 
 /** A doorway in one of the four walls, leading to another room of the floor. */
 export interface Door {
@@ -490,6 +528,14 @@ export type GameEvent =
   | { type: "coverFlip"; cover: number; pos: Vec }
   | { type: "coverHit"; cover: number; pos: Vec }
   | { type: "coverBreak"; cover: number; pos: Vec; kind: CoverKind }
+  /** A squad leader's word: "Fire!", "Forward!", "Pikes!" (the order is shown over his head). */
+  | { type: "squadOrder"; pos: Vec; order: "volley" | "charge" | "advance" | "chant" }
+  /** The leader fell: his men lose the formation. */
+  | { type: "squadBroken"; pos: Vec }
+  /** The Church burnt a body before it could be raised. */
+  | { type: "corpseBurned"; pos: Vec }
+  /** A paviser set his great shield in the ground. */
+  | { type: "pavise"; pos: Vec }
   | { type: "explosion"; pos: Vec; radius: number }
   | { type: "fire"; pos: Vec; radius: number }
   | { type: "bulletWall"; pos: Vec }

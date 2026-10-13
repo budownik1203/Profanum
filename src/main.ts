@@ -29,6 +29,8 @@ import { GameRenderer, type Prompt } from "./render/renderer.js";
 import { Screens, type InvRow, type InvSection, type MenuView } from "./render/screens.js";
 import { buildCodexView } from "./render/codexview.js";
 import { CODEX_SECTIONS, noteEvents, noteWorld } from "./game/codex.js";
+import { type Drill, formSquads } from "./game/tactics.js";
+import type { UnitKind } from "./game/data/units.js";
 import type { ItemId, RelicId } from "./game/data/items.js";
 import type { WeaponId } from "./game/data/weapons.js";
 
@@ -606,6 +608,22 @@ async function boot(): Promise<void> {
     lang(l: "pl" | "en") {
       meta.settings.lang = l;
       applySettings();
+    },
+    /** Replace the room's guards with these (idle) and drill them (screenshots of formations). */
+    squad(spec: [string, number, number][], drill?: Drill) {
+      const w = world();
+      if (!w) return;
+      w.units = w.units.filter((u) => u.team === "minion");
+      w.squads = [];
+      w.alarm = false;
+      for (const [kind, x, y] of spec) w.spawn(kind as UnitKind, { x, y }, undefined, { state: "idle" });
+      formSquads(w, Math.random, run?.depth ?? 1, drill ?? null);
+    },
+    /** Sound the alarm in the room. */
+    alarm() {
+      const w = world();
+      const u = w?.enemies[0];
+      if (w && u) w.raiseAlarm(u);
     },
     /** Open the Grimoire at a chapter and entry (screenshots). */
     codex(tab = 0, entry = 0) {
