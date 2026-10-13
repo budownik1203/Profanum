@@ -54,7 +54,8 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 ## Co jest w grze
 
 - **Wyprawa**: pięć pięter (Cmentarz, Slumsy, Dzielnica kupiecka, Klasztor, Katedra) i Sanktuarium Płomienia.
-  Każde piętro ma 10–12 pokoi: walki, skarbiec, Paser, ołtarz, mini-boss, boss i ukryte katakumby za pękniętą ścianą.
+  Każde piętro ma 14–18 sal: walki, skarbiec, Paser, ołtarz, sala próby, boss i ukryte katakumby za pękniętą ścianą.
+  W zwykłych salach drzwi często stoją poza środkiem ściany.
 - **Tajne piętra**: w katakumbach pięter 1–4 jest zapadnia na kłódkę. Klucz otwiera zejście do Ossuarium (pod piętrami 1–2)
   albo Lochów Inkwizycji (pod piętrami 3–4). Tajne piętro jest krótkie, ciemne i dobrze strzeżone, ma skarbiec z relikwiarzem,
   a schody za jego strażnikiem prowadzą na następne piętro.
@@ -64,8 +65,16 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
   Latarnicy zapalają zgaszone światła.
 - **Nekromancja**: zabici zostawiają trupy i dusze. Wskrzeszasz ich jako sługi, które zachowują rolę z życia.
   Z trzech trupów zszywasz abominację. Szczątki przeklętej broni wskrzeszasz na ołtarzu jako legendę.
-- **Wrogowie**: 20 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli) i szczury Szczurołapa.
-  Okultyści walczą ze wszystkimi.
+  W toku: inna nekromancja dla każdej postaci (szkielety, duchy i upiory, organy na jedną abominację, fanatycy, wisielcy).
+- **Wrogowie**: 25 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli) i szczury Szczurołapa.
+  Okultyści walczą ze wszystkimi, dzikie zombie stoją do alarmu, potem atakują najbliższego.
+- **Taktyka**: oddziały pod dowódcą (pióropusz, w procesji krzyż) formują szeregi strzelców z salwą i kontrmarszem,
+  klin halabardników szarżujący razem, paweże przed szeregiem i procesję za krzyżem; śmierć dowódcy rozbija formację.
+  Mnisi, akolici i pochodniarze palą trupy, zanim je wskrzesisz.
+- **Elity i czempioni**: cztery elity (Grenadier, Rzeźnik, Spowiednik Płomienia, Przyzywacz) z własnymi atakami
+  w zwykłych salach, częściej głębiej; czempioni jak w Isaacu (aura i jedna cecha). Sala próby: fale z elitami i czempionami.
+- **Więcej walki**: fale wchodzące drzwiami, posiłki z sąsiedniej sali, dzwonnik wzywający pomoc, zasadzki,
+  krąg przywołania, obława pochodniarzy po alarmie, obrona przez 40 sekund.
 - **Bossowie**: po trzech na piętro (piętro losuje jednego) i Święty Płomień na końcu:
   - Cmentarz: Kat Miejski, Egzorcysta, Płaczka;
   - Slumsy: Kapitan Straży, Szczurołap, Prowodyr Tłumu;
@@ -108,6 +117,8 @@ src/
     floor.ts         generator piętra i przejścia
     run.ts           cała wyprawa, zapis
     meta.ts          to, co przetrwa śmierć: Echo, odblokowania, statystyki, ustawienia
+    tactics.ts       oddziały, dowódcy i formacje
+    reinforce.ts     fale, posiłki, dzwon, zasadzki, krąg, obława, obrona
     codex.ts         Grimuar: kogo spotkano, co trzymano w ręku, ilu zabito
     hub.ts           krypta
   render/            widok w PixiJS v8: postacie, bossowie, otoczenie, ikony, HUD, menu
@@ -126,5 +137,7 @@ Gotowe są wszystkie elementy zakresu z dokumentu poza tymi, które dokument odk
 - docelowe sprite'y cut-out (teraz parametryczne figury w kodzie),
 - nagrany narrator (teraz napisy),
 - wersja desktop i Steam.
+
+Plan dalszych prac jest w dokumencie projektowym (sekcja „Plan dalszych prac”).
 
 Balans liczbowy wymaga prawdziwych graczy. Bot przechodzi całe wyprawy w trybie nieśmiertelności i daje tylko przybliżenie.
