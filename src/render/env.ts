@@ -686,6 +686,25 @@ export function drawInteractable(g: Graphics, glow: Graphics, it: Interactable, 
       if (highlight) glow.circle(x, y - 36, 50).fill({ color: PAL.soul, alpha: 0.08 });
       break;
     }
+    case "codex": {
+      // the Grimoire: a black book chained to a block of stone, an eye burning on its cover
+      g.ellipse(x, y + 36, 60, 15).fill({ color: PAL.ink, alpha: 0.6 });
+      g.rect(x - 34, y - 8, 68, 44).fill(0x4a4644).stroke({ width: 4, color: PAL.ink });
+      g.rect(x - 38, y - 14, 76, 10).fill(0x5e5a56).stroke({ width: 3, color: PAL.ink });
+      g.poly([x - 32, y - 16, x + 32, y - 16, x + 27, y - 44, x - 27, y - 44]).fill(0x1c1614).stroke({ width: 4, color: PAL.ink });
+      g.poly([x - 32, y - 16, x - 27, y - 44, x - 22, y - 44, x - 26, y - 16]).fill(0x3a2a20);
+      for (const side of [-1, 1]) {
+        g.moveTo(x + side * 24, y - 22).quadraticCurveTo(x + side * 46, y - 10, x + side * 36, y + 14).stroke({ width: 5, color: PAL.ink });
+        g.moveTo(x + side * 24, y - 22).quadraticCurveTo(x + side * 46, y - 10, x + side * 36, y + 14).stroke({ width: 2.5, color: 0x6a6660 });
+      }
+      g.ellipse(x, y - 30, 11, 6.5).fill(0xe8d8b8).stroke({ width: 2, color: PAL.ink });
+      const look = Math.sin(t * 0.7) * 3;
+      g.circle(x + look, y - 30, 4).fill(0x8a1a10);
+      glow.circle(x + look, y - 30, 2).fill(PAL.emberHot);
+      glow.circle(x, y - 30, 22).fill({ color: PAL.ember, alpha: 0.1 + 0.05 * Math.sin(t * 2) });
+      if (highlight) glow.circle(x, y - 26, 56).fill({ color: PAL.soul, alpha: 0.08 });
+      break;
+    }
     default:
       break;
   }

@@ -32,7 +32,7 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 | --- | --- |
 | `node tools/fullrun.mjs [n] [god\|mortal] [postać] [secrets]` | Bot przechodzi całe wyprawy: czas, pokoje, utknięcia, bossowie, wydajność kroku |
 | `node tools/balance.mjs [n] [broń] [bossowie]` | Bot walczy z każdym bossem: czas zabicia i utracone serca |
-| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, loot2, secret, crypt, audio) |
+| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, loot2, secret, crypt, codex, audio) |
 
 ## Sterowanie
 
@@ -48,7 +48,8 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 | Sznur Wiedźmy | C |
 | Przewróć ławkę lub stół jako osłonę | Spacja |
 | Zmiana broni | 1–9, kółko myszy |
-| Pauza (sterowanie i ekwipunek) | Esc |
+| Pauza (sterowanie, ekwipunek, Grimuar) | Esc |
+| Grimuar: rozdział / wpis | Q, E / strzałki albo mysz |
 
 ## Co jest w grze
 
@@ -63,7 +64,7 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
   Latarnicy zapalają zgaszone światła.
 - **Nekromancja**: zabici zostawiają trupy i dusze. Wskrzeszasz ich jako sługi, które zachowują rolę z życia.
   Z trzech trupów zszywasz abominację. Szczątki przeklętej broni wskrzeszasz na ołtarzu jako legendę.
-- **Wrogowie**: 26 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli) i szczury Szczurołapa.
+- **Wrogowie**: 20 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli) i szczury Szczurołapa.
   Okultyści walczą ze wszystkimi.
 - **Bossowie**: po trzech na piętro (piętro losuje jednego) i Święty Płomień na końcu:
   - Cmentarz: Kat Miejski, Egzorcysta, Płaczka;
@@ -77,6 +78,9 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
   22 przedmioty, 10 relikwii i 9 synergii.
 - **Krypta**: między wyprawami są tu sarkofagi 6 postaci z historiami, ołtarz Echa (odblokowania),
   gadająca czaszka z opowieścią odblokowywaną postępami i rejestr zmarłych ze statystykami.
+- **Grimuar**: kompendium jak Ammonomicon, na pulpicie w krypcie i w menu pauzy. Sześć rozdziałów (wrogowie, bossowie,
+  bronie, przedmioty, relikwie, synergie), 101 wpisów. Wpis otwiera się, gdy coś spotkasz albo weźmiesz do ręki,
+  i pokazuje figurę lub ikonę, krótką historię, liczby (wytrzymałość, gdzie spotkać, obrażenia, magazynek) i licznik zabitych.
 - **Oprawa**: tusz i czerń w duchu DD, krew zostająca na posadzce, filtr filmu (ziarno, desaturacja)
   oraz narrator z czarnym humorem (napisy PL/EN).
   Dźwięk to proch, przybitka, krew, dzwony i szkło, a muzyka to organy i chór, które w walce przechodzą w kotły i dysonans.
@@ -104,6 +108,7 @@ src/
     floor.ts         generator piętra i przejścia
     run.ts           cała wyprawa, zapis
     meta.ts          to, co przetrwa śmierć: Echo, odblokowania, statystyki, ustawienia
+    codex.ts         Grimuar: kogo spotkano, co trzymano w ręku, ilu zabito
     hub.ts           krypta
   render/            widok w PixiJS v8: postacie, bossowie, otoczenie, ikony, HUD, menu
   audio.ts           dźwięk i muzyka (WebAudio, wszystko syntezowane)

@@ -17,6 +17,8 @@ export class Container {
   addChild(...c: Container[]): Container;
   removeChild(...c: Container[]): Container;
   destroy(opts?: unknown): void;
+  /** v8: the extent of what is drawn, in the container's own space (its transform not applied). */
+  getLocalBounds(): { x: Num; y: Num; width: Num; height: Num; minX: Num; minY: Num; maxX: Num; maxY: Num };
 }
 export class Graphics extends Container {
   clear(): this;

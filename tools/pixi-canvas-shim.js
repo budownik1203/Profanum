@@ -189,6 +189,59 @@
       this._painted = true;
       return this;
     }
+    /** The painted shapes' extent in local space (curves by their control points, strokes padded). */
+    getLocalBounds() {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      const add = (x, y, pad) => {
+        minX = Math.min(minX, x - pad);
+        minY = Math.min(minY, y - pad);
+        maxX = Math.max(maxX, x + pad);
+        maxY = Math.max(maxY, y + pad);
+      };
+      for (const [kind, path, style] of this._cmds) {
+        if (!path) continue;
+        const pad = kind === "stroke" ? ((style && style.width) || 1) / 2 : 0;
+        for (const op of path) {
+          switch (op[0]) {
+            case "rect":
+            case "roundRect":
+              add(op[1], op[2], pad);
+              add(op[1] + op[3], op[2] + op[4], pad);
+              break;
+            case "circle":
+            case "arc":
+              add(op[1] - op[3], op[2] - op[3], pad);
+              add(op[1] + op[3], op[2] + op[3], pad);
+              break;
+            case "ellipse":
+              add(op[1] - op[3], op[2] - op[4], pad);
+              add(op[1] + op[3], op[2] + op[4], pad);
+              break;
+            case "poly":
+              for (let i = 0; i + 1 < op[1].length; i += 2) add(op[1][i], op[1][i + 1], pad);
+              break;
+            case "moveTo":
+            case "lineTo":
+              add(op[1], op[2], pad);
+              break;
+            case "quad":
+              add(op[1], op[2], pad);
+              add(op[3], op[4], pad);
+              break;
+            case "bezier":
+              add(op[1], op[2], pad);
+              add(op[3], op[4], pad);
+              add(op[5], op[6], pad);
+              break;
+          }
+        }
+      }
+      if (minX > maxX) minX = maxX = minY = maxY = 0;
+      return { minX, minY, maxX, maxY, x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }
     _draw(ctx) {
       for (const [kind, path, style] of this._cmds) {
         if (!path || path.length === 0) continue;

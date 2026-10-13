@@ -6,6 +6,7 @@
 import { CHARACTERS, STARTING_POOL, UNLOCKABLES, type Challenge, type CharacterId } from "./data/items.js";
 import { FLOORS } from "./data/floors.js";
 import type { SavedRun, Run } from "./run.js";
+import { type Codex, cleanCodex, freshCodex } from "./codex.js";
 
 export interface Settings {
   /** Screen shake strength 0..1 (design doc: Dostępność). */
@@ -35,6 +36,8 @@ export interface Meta {
   skull: number;
   /** Lines of the skull's story already heard (indices into SKULL_STORY). */
   skullHeard: number[];
+  /** The Grimoire: everything met and held over all the runs. */
+  codex: Codex;
 }
 
 export interface Store {
@@ -97,6 +100,7 @@ export function freshMeta(): Meta {
     settings: { shake: 1, volume: 0.8, music: 0.6, numbers: true, grace: false, film: true, lang: "pl" },
     skull: 0,
     skullHeard: [],
+    codex: freshCodex(),
   };
 }
 
@@ -113,6 +117,7 @@ export function loadMeta(store: Store): Meta {
       settings: { ...fresh.settings, ...(m.settings ?? {}) },
       characters: m.characters?.length ? m.characters : fresh.characters,
       skullHeard: Array.isArray(m.skullHeard) ? m.skullHeard : [],
+      codex: cleanCodex(m.codex),
       // the challenges were once named after single bosses
       challenges: (m.challenges ?? []).map((c) => ((c as string) === "killCaptain" ? "beatSlums" : (c as string) === "killInquisitor" ? "beatCathedral" : c)),
     };

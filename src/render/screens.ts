@@ -43,19 +43,91 @@ export interface InvSection {
   rows: InvRow[];
 }
 
+/**
+ * A picture drawn into its own graphics, then scaled and moved to fit its box. The fit is measured
+ * from the drawing's bounds once per key and box, so a figure that moves doesn't breathe in size.
+ */
+export interface Picture {
+  key: string;
+  draw: (g: Graphics) => void;
+  /** The largest scale (a small icon isn't blown up past it). */
+  max: number;
+}
+
+export interface CodexCell {
+  known: boolean;
+  picture?: Picture;
+}
+
+/** The Grimoire's page: tabs, a grid of entries and the one looked at. */
+export interface CodexView {
+  title: string;
+  progress: string;
+  tabs: string[];
+  tab: number;
+  cells: CodexCell[];
+  selected: number;
+  detail: {
+    name: string;
+    sub?: string;
+    lore?: string;
+    lines: string[];
+    known: boolean;
+    picture?: Picture;
+    /** The picture is a figure standing on its feet (otherwise an icon centred in the box). */
+    feet?: boolean;
+  };
+  hint: string;
+}
+
 export class Screens {
   readonly layer = new Container();
   private g = new Graphics();
+  /** Scaled pictures (figures and icons in the Grimoire), each in its own graphics. */
+  private pics = new Container();
+  private picPool: Graphics[] = [];
+  private picsUsed = 0;
+  private fits = new Map<string, { s: number; cx: number; cy: number; bottom: number }>();
   private tx: TextPool;
 
   constructor() {
     this.layer.addChild(this.g);
+    this.layer.addChild(this.pics);
     this.tx = new TextPool(this.layer);
   }
 
   begin(): void {
     this.g.clear();
+    for (const p of this.picPool) {
+      p.clear();
+      p.visible = false;
+    }
+    this.picsUsed = 0;
     this.tx.begin();
+  }
+
+  /** Draw a picture fitted into the box (x, y, w, h): centred, or standing on the box's floor. */
+  private picture(pic: Picture, x: number, y: number, w: number, h: number, stand = false): void {
+    let g = this.picPool[this.picsUsed];
+    if (!g) {
+      g = new Graphics();
+      this.picPool.push(g);
+      this.pics.addChild(g);
+    }
+    this.picsUsed += 1;
+    g.visible = true;
+    pic.draw(g);
+    const key = `${pic.key}@${w}x${h}`;
+    let fit = this.fits.get(key);
+    if (!fit) {
+      const b = g.getLocalBounds();
+      const bw = Math.max(1, b.width);
+      const bh = Math.max(1, b.height);
+      fit = { s: Math.min(w / bw, h / bh, pic.max), cx: b.x + bw / 2, cy: b.y + bh / 2, bottom: b.y + bh };
+      this.fits.set(key, fit);
+    }
+    g.scale.set(fit.s);
+    g.position.set(x + w / 2 - fit.cx * fit.s, stand ? y + h - fit.bottom * fit.s : y + h / 2 - fit.cy * fit.s);
   }
 
   end(): void {
@@ -234,6 +306,72 @@ export class Screens {
       cy += l.h;
     }
     if (hidden > 0) this.tx.text(more(hidden), x + 36, cy + 6, { size: 18, color: PAL.hudDim });
+  }
+
+  /** The Grimoire: chapters as tabs, a grid of entries on the left, the chosen one on the right. */
+  codex(v: CodexView, mouse: Vec): { tab: number; cell: number } {
+    this.dim(0.6);
+    const x0 = 80;
+    const y0 = 40;
+    const W = VIEW_W - 160;
+    const H = VIEW_H - 80;
+    frame(this.g, x0, y0, W, H, 0.94);
+    this.tx.text(v.title, x0 + 40, y0 + 22, { size: 48, font: "display", color: 0xe8d8b8 });
+    this.tx.text(v.progress, x0 + W - 40, y0 + 40, { size: 22, color: PAL.hudDim, align: "right" }, 1, 0);
+    // the chapters
+    let hoverTab = -1;
+    const tabW = (W - 80) / v.tabs.length;
+    v.tabs.forEach((label, i) => {
+      const tx = x0 + 40 + i * tabW;
+      const ty = y0 + 92;
+      const over = mouse.x > tx && mouse.x < tx + tabW - 8 && mouse.y > ty && mouse.y < ty + 46;
+      if (over) hoverTab = i;
+      const sel = i === v.tab;
+      this.g.rect(tx, ty, tabW - 8, 46).fill({ color: sel ? 0x3a2418 : 0x16110e, alpha: 0.95 }).stroke({ width: 2, color: sel ? PAL.ember : 0x3a2e26 });
+      this.tx.text(label, tx + (tabW - 8) / 2, ty + 23, { size: 21, color: sel ? 0xf4e2c8 : over ? PAL.hudText : PAL.hudDim, align: "center", font: "display" }, 0.5, 0.5);
+    });
+    // the entries of this chapter
+    const cell = 108;
+    const cols = 6;
+    const gx = x0 + 40;
+    const gy = y0 + 166;
+    let hoverCell = -1;
+    v.cells.forEach((c, i) => {
+      const cx = gx + (i % cols) * (cell + 8);
+      const cy = gy + Math.floor(i / cols) * (cell + 8);
+      const over = mouse.x > cx && mouse.x < cx + cell && mouse.y > cy && mouse.y < cy + cell;
+      if (over) hoverCell = i;
+      const sel = i === v.selected;
+      this.g.rect(cx, cy, cell, cell).fill({ color: c.known ? 0x1e1814 : 0x0e0b0a, alpha: 0.95 }).stroke({ width: sel ? 3 : 2, color: sel ? PAL.ember : over ? 0x6a5040 : 0x2e2622 });
+      if (c.known && c.picture) this.picture(c.picture, cx + 10, cy + 10, cell - 20, cell - 20);
+      else this.tx.text("?", cx + cell / 2, cy + cell / 2, { size: 40, color: 0x3a302a, align: "center", font: "display" }, 0.5, 0.5);
+    });
+    // the chosen entry
+    const d = v.detail;
+    const dx = x0 + 40 + cols * (cell + 8) + 40;
+    const dw = x0 + W - 40 - dx;
+    const box = { x: dx, y: gy, w: dw, h: 330 };
+    this.g.rect(box.x, box.y, box.w, box.h).fill({ color: 0x0c0908, alpha: 0.9 }).stroke({ width: 2, color: 0x3a2e26 });
+    this.g.ellipse(box.x + box.w / 2, box.y + box.h - 40, 150, 24).fill({ color: PAL.ember, alpha: d.known ? 0.06 : 0.02 });
+    if (d.known && d.picture) this.picture(d.picture, box.x + 30, box.y + 24, box.w - 60, d.feet ? box.h - 56 : box.h - 48, d.feet);
+    else this.tx.text("?", box.x + box.w / 2, box.y + box.h / 2, { size: 120, color: 0x2a221e, align: "center", font: "display" }, 0.5, 0.5);
+    let ty = box.y + box.h + 22;
+    this.tx.text(d.name, dx, ty, { size: 38, font: "display", color: d.known ? 0xf4e2c8 : PAL.hudDim });
+    ty += 52;
+    if (d.sub) {
+      this.tx.text(d.sub, dx, ty, { size: 20, color: PAL.ember });
+      ty += 36;
+    }
+    if (d.lore) {
+      this.tx.text(d.lore, dx, ty, { size: 21, color: 0xb8a890, italic: true, wrap: dw });
+      ty += 30 * Math.max(1, Math.ceil(d.lore.length / (dw / 10.5))) + 14;
+    }
+    for (const line of d.lines) {
+      this.tx.text(line, dx, ty, { size: 19, color: PAL.hudText, wrap: dw });
+      ty += 27 * Math.max(1, Math.ceil(line.length / (dw / 9.6)));
+    }
+    this.tx.text(v.hint, VIEW_W / 2, y0 + H - 30, { size: 18, color: PAL.hudDim, align: "center" }, 0.5, 0.5);
+    return { tab: hoverTab, cell: hoverCell };
   }
 
   /** The controls, shown in the crypt and on request. */

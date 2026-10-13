@@ -27,6 +27,8 @@ import { GameAudio, type MusicState } from "./audio.js";
 import { drawItemIcon, drawRelicIcon } from "./render/icons.js";
 import { GameRenderer, type Prompt } from "./render/renderer.js";
 import { Screens, type InvRow, type InvSection, type MenuView } from "./render/screens.js";
+import { buildCodexView } from "./render/codexview.js";
+import { CODEX_SECTIONS, noteEvents, noteWorld } from "./game/codex.js";
 import type { ItemId, RelicId } from "./game/data/items.js";
 import type { WeaponId } from "./game/data/weapons.js";
 
@@ -34,7 +36,7 @@ const STEP = 1 / 60;
 const MAX_STEPS = 5;
 
 type Mode = "title" | "hub" | "run" | "summary";
-type Overlay = null | "pause" | "options" | "note" | "echoAltar" | "ledger";
+type Overlay = null | "pause" | "options" | "note" | "echoAltar" | "ledger" | "codex";
 
 async function boot(): Promise<void> {
   const app = new Application();
@@ -83,6 +85,23 @@ async function boot(): Promise<void> {
   let frozen = false;
   let lastFloor: Floor | null = null;
   let time = 0;
+  /** The Grimoire: the open chapter and entry, and whether its records need saving. */
+  let codexTab = 0;
+  let codexSel = 0;
+  let codexDirty = false;
+  // closing the tab mid-room keeps what the grimoire saw
+  window.addEventListener("pagehide", () => {
+    if (codexDirty) persist();
+  });
+  const openCodex = (back: Overlay) => {
+    overlay = "codex";
+    overlayBack = back;
+    if (codexDirty) {
+      persist();
+      codexDirty = false;
+    }
+    input.releaseMouse();
+  };
 
   const showBanner = (text: string, sub?: string, seconds = 2.6) => {
     banner = { text, sub, time: seconds };
@@ -105,6 +124,7 @@ async function boot(): Promise<void> {
   const enterHub = () => {
     hub = buildHub(meta.selected);
     refreshHub();
+    if (noteWorld(meta.codex, hub)) persist();
     mode = "hub";
     overlay = null;
     view.reset();
@@ -112,7 +132,7 @@ async function boot(): Promise<void> {
     showBanner(t("hub.title"), t("hub.stats", { runs: meta.stats.runs, wins: meta.stats.wins, kills: meta.stats.kills }));
   };
 
-  const roomKey = (r: Run) => `${r.seed}:${r.depth}:${r.floor.current}`;
+  const roomKey = (r: Run) => `${r.seed}:${r.depth}:${r.secret ?? ""}:${r.floor.current}`;
 
   const startRun = (r: Run, fresh: boolean) => {
     run = r;
@@ -167,7 +187,7 @@ async function boot(): Promise<void> {
   const titleMenu = (): MenuView => {
     const saved = loadRun(store);
     const items = [
-      ...(saved ? [{ label: `${t("title.continue")} · ${t(`floor.${saved.depth >= 6 ? "sanktuarium" : ["cmentarz", "slumsy", "kupiecka", "klasztor", "katedra"][saved.depth - 1]}`)}` }] : []),
+      ...(saved ? [{ label: `${t("title.continue")} · ${t(`floor.${saved.secret ?? (saved.depth >= 6 ? "sanktuarium" : ["cmentarz", "slumsy", "kupiecka", "klasztor", "katedra"][saved.depth - 1])}`)}` }] : []),
       { label: t("title.crypt") },
       { label: t("title.options") },
       { label: t("title.lang") },
@@ -229,13 +249,14 @@ async function boot(): Promise<void> {
   };
 
   const pauseMenu = (): MenuView => {
-    const items = [{ label: t("pause.resume") }, { label: t("pause.options") }, ...(mode === "run" ? [{ label: t("pause.abandon") }] : []), { label: t("pause.quit") }];
+    const items = [{ label: t("pause.resume") }, { label: t("pause.codex") }, { label: t("pause.options") }, ...(mode === "run" ? [{ label: t("pause.abandon") }] : []), { label: t("pause.quit") }];
     return { title: t("pause.title"), items, selected: Math.min(sel, items.length - 1) };
   };
 
   const pauseAction = (i: number) => {
     const acts: (() => void)[] = [
       () => (overlay = null),
+      () => openCodex("pause"),
       () => {
         overlay = "options";
         overlayBack = "pause";
@@ -244,7 +265,11 @@ async function boot(): Promise<void> {
     ];
     if (mode === "run") acts.push(() => endRun(true));
     acts.push(() => {
-      // the run stays saved at the start of its floor
+      // the run stays saved at the start of its floor, the grimoire keeps what was seen since
+      if (codexDirty) {
+        persist();
+        codexDirty = false;
+      }
       overlay = null;
       mode = "title";
       sel = 0;
@@ -279,6 +304,10 @@ async function boot(): Promise<void> {
     if (ref === "ledger") {
       overlay = "ledger";
       input.releaseMouse();
+      return;
+    }
+    if (ref === "codex") {
+      openCodex(null);
       return;
     }
     if (ref in CHARACTERS) {
@@ -348,6 +377,8 @@ async function boot(): Promise<void> {
             return { text: t("hub.skull"), pos };
           case "ledger":
             return { text: t("hub.ledger"), pos };
+          case "codex":
+            return { text: t("hub.codex"), pos };
           case "sarcophagus":
             return null; // the sarcophagus panel says it all
           default:
@@ -568,6 +599,20 @@ async function boot(): Promise<void> {
       overlay = o as Overlay;
       sel = 0;
     },
+    get codexSections() {
+      return CODEX_SECTIONS;
+    },
+    /** Switch the language (screenshots of both). */
+    lang(l: "pl" | "en") {
+      meta.settings.lang = l;
+      applySettings();
+    },
+    /** Open the Grimoire at a chapter and entry (screenshots). */
+    codex(tab = 0, entry = 0) {
+      codexTab = tab;
+      codexSel = entry;
+      openCodex(null);
+    },
   };
 
   // ---------------------------------------------------------------- the loop
@@ -653,15 +698,26 @@ async function boot(): Promise<void> {
           } else if (run) {
             events = run.update(STEP, stepInput);
             react(events, run.world);
+            // the Grimoire notes who was met and killed, what was held
+            if (noteEvents(meta.codex, events)) codexDirty = true;
+            if (noteWorld(meta.codex, run.world)) codexDirty = true;
             if (run.floor !== lastFloor) {
               // down the stairs: a new floor, saved at its start
               lastFloor = run.floor;
               view.setRoom(roomKey(run), run.world);
               saveRun(store, run.snapshot());
+              if (codexDirty) {
+                persist();
+                codexDirty = false;
+              }
               floorBanner(run);
               narrator.newFloor(run.world.theme);
             } else if (events.some((e) => e.type === "enterRoom")) {
               view.setRoom(roomKey(run), run.world);
+              if (codexDirty) {
+                persist();
+                codexDirty = false;
+              }
               const alarmed = run.world.alarm && run.world.enemies.length > 0 && run.world.hadEnemies && run.floor.node.type !== "boss";
               showBanner(roomTitle(run), alarmed ? t("banner.alarmed") : undefined, 2.2);
               if (alarmed) narrator.say("alarmed", 30);
@@ -737,6 +793,32 @@ async function boot(): Promise<void> {
       if (esc || accept || clicked) {
         overlay = null;
         input.releaseMouse();
+      }
+    } else if (overlay === "codex") {
+      const left = input.wasPressed("KeyA") || input.wasPressed("ArrowLeft");
+      const right = input.wasPressed("KeyD") || input.wasPressed("ArrowRight");
+      const count = CODEX_SECTIONS[codexTab].entries.length;
+      const before = { tab: codexTab, sel: codexSel };
+      if (input.wasPressed("KeyQ")) codexTab = (codexTab - 1 + CODEX_SECTIONS.length) % CODEX_SECTIONS.length;
+      if (input.wasPressed("KeyE") || input.wasPressed("Tab")) codexTab = (codexTab + 1) % CODEX_SECTIONS.length;
+      for (let i = 0; i < CODEX_SECTIONS.length; i++) if (input.wasPressed(`Digit${i + 1}`)) codexTab = i;
+      if (codexTab !== before.tab) codexSel = 0;
+      else {
+        if (left) codexSel = (codexSel - 1 + count) % count;
+        if (right) codexSel = (codexSel + 1) % count;
+        if (up) codexSel = Math.max(0, codexSel - 6);
+        if (down) codexSel = Math.min(count - 1, codexSel + 6);
+      }
+      const hover = screens.codex(buildCodexView(meta.codex, codexTab, codexSel, time), mouse);
+      if (hover.cell >= 0 && hover.cell !== codexSel) codexSel = hover.cell;
+      if (clicked && hover.tab >= 0 && hover.tab !== codexTab) {
+        codexTab = hover.tab;
+        codexSel = 0;
+      }
+      if (codexTab !== before.tab || codexSel !== before.sel) audio.ui("move");
+      if (esc) {
+        overlay = overlayBack;
+        sel = 0;
       }
     } else if (overlay === "echoAltar") {
       const rows = altarRows();

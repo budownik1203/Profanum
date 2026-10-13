@@ -427,7 +427,7 @@ export interface Chest {
   mimic: boolean;
 }
 
-export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger" | "hatch";
+export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger" | "hatch" | "codex";
 
 export interface Interactable {
   id: number;
