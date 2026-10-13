@@ -38,6 +38,7 @@ test("every weapon in the arsenal fires and hurts", () => {
     if (id !== "pistol") giveWeapon(p, id);
     p.current = p.weapons.findIndex((s) => s.id === id);
     p.souls = 50;
+    p.gold = 50;
     const hp = dummy.hp;
     step(w, { ...idleInput(dummy.pos), shoot: true }, 2.5);
     assert.ok(dummy.hp < hp, `${id} hurt the dummy`);
@@ -223,6 +224,65 @@ test("the rosary sometimes leaves a second soul", () => {
   assert.ok(souls > 66 && souls < 100, `${souls} souls from 60 kills`);
 });
 
+test("the ducat pistol shoots gold; with the gold tooth it shoots for free", () => {
+  const { w, dummy } = range();
+  const p = w.player;
+  giveWeapon(p, "coingun");
+  p.gold = 3;
+  step(w, { ...idleInput(dummy.pos), shoot: true }, 1.5);
+  assert.equal(p.gold, 0, "three shots, three ducats");
+  const ev = step(w, { ...idleInput(dummy.pos), shoot: true }, 0.6);
+  assert.ok(ev.some((e) => e.type === "tooPoor"), "no gold, no shot");
+  giveItem(p, "goldtooth");
+  assert.ok(p.stats.synergies.includes("dukaty"));
+  const hp = dummy.hp;
+  step(w, { ...idleInput(dummy.pos), shoot: true }, 1);
+  assert.ok(dummy.hp < hp, "free shots");
+  assert.equal(p.stats.goldMul, 1.5, "and the dead pay half again more");
+});
+
+test("glass glances off the walls: the glass gun, the stained glass shard and the rose window", () => {
+  const { w } = range();
+  const p = w.player;
+  const away = vec(p.pos.x - 400, p.pos.y);
+  const bounceOf = () => {
+    w.bullets = [];
+    for (const sl of p.weapons) sl.cooldown = 0;
+    step(w, { ...idleInput(away), shoot: true }, DT);
+    return w.bullets.find((b) => b.fromPlayer)?.bounce ?? 0;
+  };
+  assert.equal(bounceOf(), 0, "a plain pistol ball breaks on the wall");
+  giveItem(p, "stainedglass");
+  p.current = 0;
+  assert.equal(bounceOf(), 1);
+  giveWeapon(p, "glassgun");
+  assert.ok(p.stats.synergies.includes("witraz"));
+  assert.equal(bounceOf(), 2 + 1 + 2);
+  // a shard really comes back off the wall
+  w.player.pos = vec(200, 550);
+  w.bullets = [];
+  p.weapons[p.current].cooldown = 0;
+  step(w, { ...idleInput(vec(0, 550)), shoot: true }, DT);
+  const shard = w.bullets.find((b) => b.fromPlayer)!;
+  step(w, idleInput(vec(0, 550)), 0.3);
+  assert.ok(shard.vel.x > 0, "glanced off the west wall");
+});
+
+test("the rat musket's rats find their own way, the snuffer puts flames out in passing", () => {
+  const { w, dummy } = range();
+  const p = w.player;
+  giveWeapon(p, "ratgun");
+  const hp = dummy.hp;
+  step(w, { ...idleInput(vec(p.pos.x, p.pos.y - 300)), shoot: true }, DT);
+  step(w, idleInput(vec(p.pos.x, p.pos.y - 300)), 1.5);
+  assert.ok(dummy.hp < hp, "rats fired upwards turned to bite the dummy on the right");
+  const { w: w2 } = range();
+  giveWeapon(w2.player, "snuffer");
+  const candle = w2.addLight("candle", vec(w2.player.pos.x + 200, w2.player.pos.y - 30));
+  step(w2, { ...idleInput(vec(w2.player.pos.x + 600, w2.player.pos.y)), shoot: true }, 0.4);
+  assert.equal(candle.on, false, "the candle beside the bolt's path went out");
+});
+
 // ------------------------------------------------------------------ relics
 test("every relic does something when used", () => {
   for (const id of Object.keys(RELICS) as RelicId[]) {
@@ -234,6 +294,9 @@ test("every relic does something when used", () => {
     w.dark = true;
     const candle = w.addLight("candle", vec(p.pos.x + 100, p.pos.y - 100));
     corpseHere(w);
+    const servant = id === "knell" ? w.spawn("peasant", vec(p.pos.x - 60, p.pos.y), "minion") : null;
+    if (servant) servant.hp = 1;
+    if (id === "wail") w.bullets.push(enemyBullet(vec(p.pos.x, p.pos.y - 260), vec(0, 40), { life: 9 }));
     const ev = step(w, { ...idleInput(dummy.pos), relic: true }, DT);
     assert.ok(ev.some((e) => e.type === "relicUse" && e.relic === id), `${id} used`);
     assert.equal(p.relic!.charge, 0);
@@ -259,6 +322,17 @@ test("every relic does something when used", () => {
         break;
       case "finger":
         break; // checked on the floor below
+      case "chain":
+        assert.ok(Math.hypot(dummy.pos.x - p.pos.x, dummy.pos.y - p.pos.y) < 120, "dragged to his feet");
+        assert.ok(dummy.st.stun > 0);
+        break;
+      case "knell":
+        assert.ok(servant!.hp > 1, "the servant made whole");
+        assert.ok((servant!.st.frenzy ?? 0) > 0, "and frenzied");
+        break;
+      case "wail":
+        assert.equal(w.bullets.filter((b) => !b.fromPlayer).length, 0, "every bullet shattered");
+        break;
     }
   }
 });

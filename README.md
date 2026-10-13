@@ -32,7 +32,7 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
 | --- | --- |
 | `node tools/fullrun.mjs [n] [god\|mortal] [postać]` | Bot przechodzi całe wyprawy: czas, pokoje, utknięcia, bossowie, wydajność kroku |
 | `node tools/balance.mjs [n] [broń] [bossowie]` | Bot walczy z każdym bossem: czas zabicia i utracone serca |
-| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, crypt, audio) |
+| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, bosses2, items, loot2, crypt, audio) |
 
 ## Sterowanie
 
@@ -70,8 +70,8 @@ Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-bu
   - Katedra: Wielki Inkwizytor, Organista, Szklany Anioł.
 
   Każdy ma swoją arenę i fazy, a ataki zapowiada na podłodze. W świetle jest silniejszy i każdy na swój sposób przywraca światło.
-- **Arsenał**: 18 broni (palne, kusze, okultystyczne za dusze), 4 legendy z klątwami, 18 przedmiotów,
-  7 relikwii i 5 synergii.
+- **Arsenał**: 24 bronie (palne, kusze, okultystyczne za dusze, w tym broń każdego bossa), 4 legendy z klątwami,
+  22 przedmioty, 10 relikwii i 9 synergii.
 - **Krypta**: między wyprawami są tu sarkofagi 6 postaci z historiami, ołtarz Echa (odblokowania),
   gadająca czaszka z opowieścią odblokowywaną postępami i rejestr zmarłych ze statystykami.
 - **Oprawa**: tusz i czerń w duchu DD, krew zostająca na posadzce, filtr filmu (ziarno, desaturacja)

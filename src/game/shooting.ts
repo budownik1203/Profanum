@@ -75,6 +75,13 @@ export function updateShooting(w: World, input: InputState, dt: number): void {
     slot.cooldown = def.fireDelay;
     return;
   }
+  // the ducat pistol shoots gold
+  const gold = goldCostOf(w, def);
+  if (gold > 0 && p.gold < gold) {
+    slot.cooldown = 0.45;
+    w.events.push({ type: "tooPoor", pos: { ...p.pos } });
+    return;
+  }
   if (slot.loaded <= 0) {
     if (slot.ammo <= 0) {
       slot.cooldown = 0.45;
@@ -88,6 +95,12 @@ export function updateShooting(w: World, input: InputState, dt: number): void {
   fire(w, slot, def, input.aim, false);
   slot.cooldown = slot.burstLeft ? def.burstGap ?? 0.1 : def.fireDelay;
   if (slot.loaded === 0 && slot.ammo > 0 && !slot.burstLeft) startReload(w, slot);
+}
+
+/** Gold one shot costs (the ducat pistol; free with the gold tooth). */
+export function goldCostOf(w: World, def: WeaponDef): number {
+  if (!def.goldCost || w.player.stats.synergies.includes("dukaty")) return 0;
+  return def.goldCost;
 }
 
 /** Souls one shot of an occult weapon costs here (half in the dark, never below one). */
@@ -133,6 +146,9 @@ function fire(w: World, slot: WeaponSlot, def: WeaponDef, aim: Vec, echo: boolea
   let pierce = dark?.pierce ?? def.pierce;
   if (slot.ritual === "inquisitor") pierce += 3;
   const blast = slot.ritual === "monk" ? 60 : undefined;
+  const syn = stats.synergies;
+  const bounce = (def.bounce ?? 0) + stats.bounce + (def.id === "glassgun" && syn.includes("witraz") ? 2 : 0);
+  const stunMul = def.id === "abbotbell" && syn.includes("dzwony") ? 2 : 1;
 
   if (def.lob) {
     // a shell lobbed at the cursor (within reach)
@@ -161,10 +177,14 @@ function fire(w: World, slot: WeaponSlot, def: WeaponDef, aim: Vec, echo: boolea
         pierce,
         holy: def.holy,
         effect,
-        effectTime,
+        effectTime: effectTime !== undefined ? effectTime * stunMul : undefined,
         knock: def.knock,
         blast,
         weapon: def.id,
+        homing: def.homing,
+        bounce: bounce || undefined,
+        snuff: def.snuff,
+        tint: def.tint,
       });
     }
   }
@@ -172,6 +192,7 @@ function fire(w: World, slot: WeaponSlot, def: WeaponDef, aim: Vec, echo: boolea
     if (def.kind !== "occult") {
       slot.loaded -= 1;
       if (Number.isFinite(slot.ammo)) slot.ammo -= 1;
+      p.gold = Math.max(0, p.gold - goldCostOf(w, def));
     }
     p.push = add(p.push, scale(dir, -def.recoil * 10)); // push decays at 10/s, so v0 = distance * 10
     if (dark?.twice) slot.pendingVolley = 0.25;

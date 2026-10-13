@@ -56,6 +56,8 @@ export const BASE_STATS: Stats = {
   infect: false,
   dodgeReload: false,
   wickSnuffer: false,
+  goldMul: 1,
+  bounce: 0,
   synergies: [],
 };
 
@@ -63,7 +65,7 @@ export const BASE_STATS: Stats = {
 export type ItemId =
   | "boneshirt" | "powder" | "ramrod" | "bandolier" | "jarskull" | "rosary" | "shroud" | "shackles"
   | "handofglory" | "claws" | "hourglass" | "tome" | "purse" | "martyrheart" | "wick" | "gravedirt"
-  | "emberpocket" | "noose";
+  | "emberpocket" | "noose" | "goldtooth" | "stainedglass" | "usurerseal" | "spectacles";
 
 export interface ItemDef {
   id: ItemId;
@@ -95,10 +97,14 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   gravedirt: { id: "gravedirt", rarity: "common", mul: { minionHpMul: 1.5 }, price: 45 },
   emberpocket: { id: "emberpocket", rarity: "rare", stats: { dodgeReload: true }, price: 65 },
   noose: { id: "noose", rarity: "common", stats: { critChance: 0.1 }, price: 45 },
+  goldtooth: { id: "goldtooth", rarity: "common", mul: { goldMul: 1.5 }, price: 40 },
+  stainedglass: { id: "stainedglass", rarity: "rare", stats: { bounce: 1 }, price: 70 },
+  usurerseal: { id: "usurerseal", rarity: "rare", onPickup: "heart", mul: { shopMul: 1.25 }, price: 60 },
+  spectacles: { id: "spectacles", rarity: "common", stats: { critChance: 0.08 }, mul: { reloadMul: 0.9 }, price: 50 },
 };
 
 // ------------------------------------------------------------------ relics (F, charged by cleared rooms)
-export type RelicId = "monstrance" | "finger" | "plague" | "nightshroud" | "prophet" | "vial" | "rope";
+export type RelicId = "monstrance" | "finger" | "plague" | "nightshroud" | "prophet" | "vial" | "rope" | "chain" | "knell" | "wail";
 
 export interface RelicDef {
   id: RelicId;
@@ -115,6 +121,9 @@ export const RELICS: Record<RelicId, RelicDef> = {
   prophet: { id: "prophet", charge: 3, price: 90 },
   vial: { id: "vial", charge: 4, price: 85 },
   rope: { id: "rope", charge: 1, price: 55 },
+  chain: { id: "chain", charge: 2, price: 70 },
+  knell: { id: "knell", charge: 3, price: 80 },
+  wail: { id: "wail", charge: 2, price: 75 },
 };
 
 // ------------------------------------------------------------------ legends
@@ -140,6 +149,14 @@ export const SYNERGIES: SynergyDef[] = [
   { id: "armia", needs: ["jarskull", "gravedirt"] },
   // Saint Gervase's barrel + martyr's vial: every 12 kills with holy water heal half a heart
   { id: "namaszczenie", needs: ["gerwazy", "vial"] },
+  // the rat musket + the plague censer: rat bites carry the plague (the bitten rise as minions)
+  { id: "zaraza", needs: ["ratgun", "plague"] },
+  // the abbot's bell + the death knell: the bell stuns twice as long
+  { id: "dzwony", needs: ["abbotbell", "knell"] },
+  // the glass gun + stained glass: the shards glance off the walls twice more
+  { id: "witraz", needs: ["glassgun", "stainedglass"] },
+  // the ducat pistol + the gold tooth: it shoots for free
+  { id: "dukaty", needs: ["coingun", "goldtooth"] },
 ];
 
 // ------------------------------------------------------------------ loot pools
@@ -150,6 +167,7 @@ export const STARTING_POOL: string[] = [
   "doublepistol", "arquebus", "blunderbuss", "crossbow", "petronel", "howler",
   "boneshirt", "powder", "ramrod", "bandolier", "jarskull", "rosary", "shroud", "shackles", "claws", "hourglass", "purse", "noose", "martyrheart",
   "monstrance", "finger", "nightshroud", "vial", "rope",
+  "goldtooth", "spectacles", "chain", "wail",
 ];
 
 /** What the Echo altar sells into the pool, with its price in Echo of Souls. */
@@ -166,4 +184,7 @@ export const UNLOCKABLES: { id: string; echo: number }[] = [
   { id: "emberpocket", echo: 12 },
   { id: "plague", echo: 10 },
   { id: "prophet", echo: 14 },
+  { id: "stainedglass", echo: 10 },
+  { id: "usurerseal", echo: 8 },
+  { id: "knell", echo: 12 },
 ];

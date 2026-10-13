@@ -92,6 +92,7 @@ function tickStatus(w: World, u: Unit, dt: number): void {
   if (s.slow > 0) s.slow -= dt;
   if (s.fear > 0) s.fear -= dt;
   if (s.weep > 0) s.weep -= dt;
+  if (s.frenzy !== undefined && s.frenzy > 0) s.frenzy -= dt;
   if (s.burn > 0) {
     s.burn -= dt;
     u.hp -= 3 * dt;
@@ -135,7 +136,9 @@ function nearestOf(w: World, u: Unit, ok: (o: Unit) => boolean, within: number):
 // ------------------------------------------------------------------ helpers
 /** Damage multiplier of a minion's blow or bullet: items, light and darkness. */
 function minionMul(w: World, u: Unit): number {
-  return u.team === "minion" ? w.player.stats.minionDamageMul * w.sideMul(u.pos, true) : 1;
+  if (u.team !== "minion") return 1;
+  // the death knell's frenzy doubles every blow
+  return w.player.stats.minionDamageMul * w.sideMul(u.pos, true) * ((u.st.frenzy ?? 0) > 0 ? 2 : 1);
 }
 
 function telegraph(w: World, u: Unit): void {

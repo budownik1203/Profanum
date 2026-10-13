@@ -74,6 +74,42 @@ export function useRelic(w: World, aim: Vec): void {
     case "rope":
       pullNearest(w, aim);
       break;
+    case "chain": {
+      // the penitent's chain: everything near is dragged to your feet and left reeling
+      for (const u of w.units) {
+        if (!u.alive || u.team === "minion" || dist(u.pos, p.pos) > CONFIG.relics.chainRange) continue;
+        if (!u.def.boss) {
+          const to = add(p.pos, scale(norm(sub(u.pos, p.pos)), 80));
+          u.pos = w.collideWorld(to, u.radius);
+        }
+        applyEffect(u, "stun", CONFIG.relics.chainStun);
+        if (!w.alarm) w.raiseAlarm(u);
+      }
+      break;
+    }
+    case "knell":
+      // the death knell: the dead are made whole and fight like the damned
+      for (const u of w.units) {
+        if (!u.alive || u.team !== "minion") continue;
+        u.hp = u.maxHp;
+        u.st.frenzy = CONFIG.relics.knellTime;
+        w.events.push({ type: "heal", pos: { ...u.pos } });
+      }
+      break;
+    case "wail":
+      // a wail from the grave: every bullet in the air shatters, the living stagger back
+      for (const b of w.bullets) {
+        if (b.side === "minion" || b.fromPlayer) continue;
+        b.life = 0;
+        w.events.push({ type: "bulletWall", pos: { ...b.pos } });
+      }
+      w.bullets = w.bullets.filter((b) => b.life > 0);
+      for (const u of w.units) {
+        if (!u.alive || u.team === "minion" || dist(u.pos, p.pos) > CONFIG.relics.wailRange) continue;
+        u.push = add(u.push, scale(norm(sub(u.pos, p.pos)), u.def.boss ? 200 : 1400));
+      }
+      w.events.push({ type: "exorcism", pos: { ...p.pos }, radius: CONFIG.relics.wailRange, warn: false });
+      break;
   }
 }
 

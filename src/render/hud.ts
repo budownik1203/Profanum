@@ -10,7 +10,7 @@ import { WEAPONS } from "../game/data/weapons.js";
 import type { Floor } from "../game/floor.js";
 import { boundMinions } from "../game/loot.js";
 import { maxAmmo } from "../game/stats.js";
-import { reloadShare, soulCost } from "../game/shooting.js";
+import { goldCostOf, reloadShare, soulCost } from "../game/shooting.js";
 import type { World } from "../game/world.js";
 import { soulsWord, t } from "../i18n.js";
 import { PAL } from "../palette.js";
@@ -111,7 +111,8 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
     } else if (slot.reloadLeft > 0) {
       status = t("hud.reloading");
     } else {
-      const total = Number.isFinite(slot.ammo) ? ` · ${slot.ammo}/${maxAmmo(p, slot)}` : " · ∞";
+      const gold = goldCostOf(w, def);
+      const total = gold > 0 ? ` · ${t("hud.goldShot", { n: gold })}` : Number.isFinite(slot.ammo) ? ` · ${slot.ammo}/${maxAmmo(p, slot)}` : " · ∞";
       status = slot.ammo <= 0 ? t("hud.empty") : `${slot.loaded}/${def.capacity}${total}`;
     }
     tx.text(status, bx + 170, by + 48, { size: 24, color: slot.ammo <= 0 ? PAL.telegraph : PAL.hudText });

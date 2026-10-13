@@ -152,6 +152,45 @@ export function drawItemIcon(g: Graphics, id: ItemId, x: number, y: number, s = 
       for (let i = 1; i < 3; i++) g.moveTo(x - 4 * s, y - 12 * s + i * 3.3 * s).lineTo(x + 4 * s, y - 12 * s + i * 3.3 * s).stroke({ width: 1.2 * s, color: INK });
       line(g, x, y - 12 * s, x, y - 17 * s, 3 * s, ROPE);
       return;
+    case "goldtooth":
+      // a gold molar with its roots
+      g.moveTo(x - 10 * s, y - 10 * s)
+        .quadraticCurveTo(x, y - 18 * s, x + 10 * s, y - 10 * s)
+        .lineTo(x + 8 * s, y + 2 * s)
+        .lineTo(x + 5 * s, y + 15 * s)
+        .lineTo(x + 1 * s, y + 4 * s)
+        .lineTo(x - 2 * s, y + 4 * s)
+        .lineTo(x - 5 * s, y + 15 * s)
+        .lineTo(x - 8 * s, y + 2 * s)
+        .lineTo(x - 10 * s, y - 10 * s)
+        .fill(GOLD)
+        .stroke(ink(s));
+      g.ellipse(x - 3 * s, y - 9 * s, 3 * s, 2 * s).fill({ color: 0xfff4c8, alpha: 0.8 });
+      return;
+    case "stainedglass": {
+      // a broken pane: coloured glass held in lead
+      const pts = [x - 13 * s, y - 6 * s, x - 2 * s, y - 16 * s, x + 14 * s, y - 9 * s, x + 9 * s, y + 15 * s, x - 10 * s, y + 11 * s];
+      g.poly(pts).fill(0x2a4f8c).stroke(ink(s));
+      g.poly([x - 2 * s, y - 16 * s, x + 14 * s, y - 9 * s, x + 2 * s, y]).fill(PAL.glass[0]).stroke(ink(s, 2));
+      g.poly([x + 2 * s, y, x + 9 * s, y + 15 * s, x - 10 * s, y + 11 * s]).fill(PAL.glass[2]).stroke(ink(s, 2));
+      g.moveTo(x - 9 * s, y - 4 * s).lineTo(x - 4 * s, y - 10 * s).stroke({ width: 2 * s, color: 0xffffff, alpha: 0.6 });
+      return;
+    }
+    case "usurerseal":
+      // red wax on a ribbon
+      g.poly([x - 4 * s, y + 4 * s, x - 10 * s, y + 16 * s, x - 4 * s, y + 13 * s, x, y + 16 * s, x + 1 * s, y + 4 * s]).fill(0x2a4a2a).stroke(ink(s, 2));
+      g.circle(x + 1 * s, y - 2 * s, 11 * s).fill(0x9e1f14).stroke(ink(s));
+      g.circle(x + 1 * s, y - 2 * s, 6.5 * s).stroke({ width: 2 * s, color: 0x5a0a08 });
+      g.moveTo(x - 3 * s, y - 2 * s).lineTo(x + 5 * s, y - 2 * s).stroke({ width: 2 * s, color: 0x5a0a08 });
+      return;
+    case "spectacles":
+      for (const dx of [-8, 8]) {
+        g.circle(x + dx * s, y + 2 * s, 7 * s).fill({ color: 0xd8e8f0, alpha: 0.35 }).stroke({ width: 5 * s, color: INK });
+        g.circle(x + dx * s, y + 2 * s, 7 * s).stroke({ width: 2.5 * s, color: GOLD });
+      }
+      g.moveTo(x - 2 * s, y).quadraticCurveTo(x, y - 4 * s, x + 2 * s, y).stroke({ width: 2.5 * s, color: GOLD });
+      line(g, x - 15 * s, y, x - 17 * s, y - 10 * s, 2 * s, GOLD);
+      return;
   }
 }
 
@@ -202,6 +241,29 @@ export function drawRelicIcon(g: Graphics, id: RelicId, x: number, y: number, s 
     case "rope":
       for (const r of [12, 8, 4]) g.ellipse(x, y + 4 * s, r * s, r * 0.6 * s).stroke({ width: 5 * s, color: INK }).ellipse(x, y + 4 * s, r * s, r * 0.6 * s).stroke({ width: 2.5 * s, color: ROPE });
       g.moveTo(x + 11 * s, y + 3 * s).quadraticCurveTo(x + 16 * s, y - 10 * s, x + 6 * s, y - 15 * s).stroke({ width: 5 * s, color: INK }).moveTo(x + 11 * s, y + 3 * s).quadraticCurveTo(x + 16 * s, y - 10 * s, x + 6 * s, y - 15 * s).stroke({ width: 2.5 * s, color: ROPE });
+      return;
+    case "chain":
+      // iron links ending in a shackle
+      for (let i = 0; i < 4; i++) {
+        const cx = x - 11 * s + i * 6 * s;
+        const cy = y - 11 * s + i * 6 * s;
+        g.ellipse(cx, cy, (i % 2 ? 2.5 : 4.5) * s, (i % 2 ? 4.5 : 2.5) * s).stroke({ width: 5 * s, color: INK }).ellipse(cx, cy, (i % 2 ? 2.5 : 4.5) * s, (i % 2 ? 4.5 : 2.5) * s).stroke({ width: 2.5 * s, color: 0x8c8a82 });
+      }
+      g.circle(x + 9 * s, y + 9 * s, 6 * s).stroke({ width: 7 * s, color: INK }).circle(x + 9 * s, y + 9 * s, 6 * s).stroke({ width: 3.5 * s, color: 0x6a6660 });
+      return;
+    case "knell":
+      // a black funeral bell on its yoke
+      line(g, x - 10 * s, y - 14 * s, x + 10 * s, y - 14 * s, 3 * s, PAL.wood);
+      g.poly([x - 6 * s, y - 12 * s, x - 13 * s, y + 10 * s, x + 13 * s, y + 10 * s, x + 6 * s, y - 12 * s]).fill(0x2a2624).stroke(ink(s));
+      g.ellipse(x, y + 10 * s, 13 * s, 3.5 * s).fill(0x1a1614).stroke(ink(s, 2));
+      g.circle(x, y + 14 * s, 3 * s).fill(GOLD).stroke(ink(s, 1.5));
+      g.moveTo(x - 4 * s, y - 6 * s).lineTo(x - 7 * s, y + 5 * s).stroke({ width: 2 * s, color: 0x5a5450 });
+      return;
+    case "wail":
+      // a screaming skull and the echo of its scream
+      skull(g, x - 3 * s, y + 2 * s, s * 1.1);
+      g.ellipse(x - 3 * s, y + 8 * s, 2.5 * s, 3.5 * s).fill(INK);
+      for (const r of [8, 13]) g.moveTo(x + (r - 2) * s, y - r * 0.8 * s).quadraticCurveTo(x + (r + 4) * s, y, x + (r - 2) * s, y + r * 0.8 * s).stroke({ width: 2.5 * s, color: 0xc8dcff });
       return;
   }
 }

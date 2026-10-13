@@ -467,7 +467,7 @@ export function updateBullets(w: World, dt: number): void {
         b.life = 0;
         continue;
       }
-      if (w.player.stats.wickSnuffer) snuffNear(w, from, to);
+      if (w.player.stats.wickSnuffer || b.snuff) snuffNear(w, from, to);
     }
 
     if (to.x < W.x + wall || to.y < W.y + wall || to.x > W.x + W.w - wall || to.y > W.y + W.h - wall) {
@@ -540,6 +540,8 @@ export function updateBullets(w: World, dt: number): void {
           break;
         }
       }
+      // the rat musket and the plague censer: the bitten carry the plague
+      if (b.weapon === "ratgun" && w.player.stats.synergies.includes("zaraza") && u.team !== "minion" && u.def.raisable) u.st.infected = true;
       damageUnit(w, u, b.damage, dir, {
         ambush: b.ambush,
         crit: b.crit,

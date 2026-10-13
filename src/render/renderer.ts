@@ -370,11 +370,24 @@ export class GameRenderer {
           this.floatText(e.pos, t("float.mimic"), PAL.telegraph, 34);
           this.addShake(12);
           break;
-        case "relicUse":
+        case "relicUse": {
           if (e.relic === "monstrance") this.flashWhite = 0.35;
-          for (let i = 0; i < 30; i++) this.spawn(e.pos, rnd(-300, 300), rnd(-300, 300), rnd(0.3, 0.7), rnd(2, 4), e.relic === "monstrance" ? PAL.holy : 0xc88aff, "spark");
+          const col = e.relic === "monstrance" ? PAL.holy : e.relic === "chain" ? 0x8c8a82 : e.relic === "knell" ? 0xd8b04a : e.relic === "wail" ? 0xc8dcff : 0xc88aff;
+          if (e.relic === "chain" || e.relic === "wail") {
+            // a ring: the chain's links fly in, the wail's echo rolls out
+            const r = e.relic === "chain" ? CONFIG.relics.chainRange : CONFIG.relics.wailRange;
+            for (let i = 0; i < 40; i++) {
+              const a = (i / 40) * Math.PI * 2;
+              const from = { x: e.pos.x + Math.cos(a) * (e.relic === "chain" ? r : 30), y: e.pos.y + Math.sin(a) * (e.relic === "chain" ? r : 30) };
+              const sp = e.relic === "chain" ? -r * 2.2 : r * 2.2;
+              this.spawn(from, Math.cos(a) * sp, Math.sin(a) * sp, 0.35, rnd(2, 4), col, "spark");
+            }
+          } else {
+            for (let i = 0; i < 30; i++) this.spawn(e.pos, rnd(-300, 300), rnd(-300, 300), rnd(0.3, 0.7), rnd(2, 4), col, "spark");
+          }
           this.addShake(6);
           break;
+        }
         case "relicReady":
           this.floatText(p.pos, t("float.relicReady"), 0xf4e2a8, 24);
           break;
@@ -1037,6 +1050,17 @@ function drawBullet(g: Graphics, b: Bullet, time: number): void {
     case "stone":
       g.poly([x - r, y - r * 0.4, x - r * 0.3, y - r, x + r * 0.8, y - r * 0.6, x + r, y + r * 0.4, x + r * 0.2, y + r, x - r * 0.8, y + r * 0.6]).fill(0x6a6458).stroke({ width: 2, color: PAL.ink });
       break;
+    case "rat": {
+      // a rat out of the musket, running nose first
+      const px = -dy;
+      const py = dx;
+      const wag = Math.sin(time * 30 + x) * 3;
+      g.moveTo(x - dx * 8, y - dy * 8).quadraticCurveTo(x - dx * 16 + px * wag, y - dy * 16 + py * wag, x - dx * 22, y - dy * 22).stroke({ width: 2, color: 0xb88a7a });
+      g.ellipse(x, y, r * 1.1, r * 0.75).fill(mine ? 0x5a4a3e : 0x4a3e34).stroke({ width: 2, color: PAL.ink });
+      g.poly([x + dx * r * 0.6 + px * 4, y + dy * r * 0.6 + py * 4, x + dx * (r + 8), y + dy * (r + 8), x + dx * r * 0.6 - px * 4, y + dy * r * 0.6 - py * 4]).fill(0x5a4a3e).stroke({ width: 1.5, color: PAL.ink });
+      g.circle(x + dx * (r * 0.6) + px * 2, y + dy * (r * 0.6) + py * 2, 1.4).fill(0xff6a4a);
+      break;
+    }
     case "rosette":
     case "cross":
       g.circle(x, y, r + 6).fill({ color: 0xd8b04a, alpha: 0.22 });

@@ -118,7 +118,7 @@ export function placePickup(w: World, kind: PickupKind, at: Vec, value = 1, ref?
 export function dropLoot(w: World, u: Unit): void {
   const l = CONFIG.loot;
   const [g0, g1] = u.def.gold;
-  let gold = randInt(w.rng, g0, g1) * (u.elite ? 3 : 1);
+  let gold = Math.round(randInt(w.rng, g0, g1) * (u.elite ? 3 : 1) * w.player.stats.goldMul);
   while (gold > 0) {
     const coin = gold >= 5 && w.rng() < 0.5 ? 5 : 1;
     drop(w, "gold", u.pos, coin);
@@ -149,17 +149,17 @@ export const BOSS_PRIZE: Partial<Record<UnitKind, { weapon?: WeaponId; remains?:
   exorcist: { remains: "gerwazy", echo: 10 },
   mourner: { remains: "lament", echo: 10 },
   captain: { weapon: "captainarq", echo: 12 },
-  ratcatcher: { weapon: "hakownica", echo: 12 },
-  mobleader: { weapon: "petronel", echo: 12 },
+  ratcatcher: { weapon: "ratgun", echo: 12 },
+  mobleader: { weapon: "sling", echo: 12 },
   powdermaster: { weapon: "mortar", echo: 14 },
-  usurer: { weapon: "doublepistol", echo: 14 },
-  lampmaster: { weapon: "blunderbuss", echo: 14 },
+  usurer: { weapon: "coingun", echo: 14 },
+  lampmaster: { weapon: "snuffer", echo: 14 },
   bishop: { remains: "martyrs", echo: 16 },
-  abbot: { remains: "martyrs", echo: 16 },
+  abbot: { weapon: "abbotbell", echo: 16 },
   scriptor: { weapon: "ashbook", echo: 16 },
   grandinquisitor: { weapon: "inqcrossbow", remains: "gerwazy", echo: 18 },
   organist: { weapon: "organ", echo: 18 },
-  glassangel: { remains: "gerwazy", echo: 18 },
+  glassangel: { weapon: "glassgun", echo: 18 },
   holyflame: { echo: 40 },
 };
 

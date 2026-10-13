@@ -97,6 +97,10 @@ export interface Stats {
   dodgeReload: boolean;
   /** Bullets that pass close to a light put it out. */
   wickSnuffer: boolean;
+  /** Gold dropped by the dead, as a multiplier. */
+  goldMul: number;
+  /** Walls every bullet of his glances off. */
+  bounce: number;
   /** Synergy flags by name. */
   synergies: string[];
 }
@@ -156,6 +160,8 @@ export interface Status {
   infected: boolean;
   /** Killed by the Ash Grimoire: rises as a short-lived mini minion. */
   ashMarked: boolean;
+  /** Minions: seconds of the death knell's frenzy (double damage). */
+  frenzy?: number;
 }
 
 export interface Unit {
@@ -286,7 +292,7 @@ export interface Light {
 export type BulletLook =
   | "ball" | "pellet" | "bolt" | "orb" | "ember" | "holy" | "tooth" | "bone" | "shard" | "wave"
   | "bomb" | "flask" | "torch" | "fireball" | "rosette" | "cross" | "ash" | "coin" | "page" | "note" | "tear" | "stone"
-  | "trap" | "book";
+  | "trap" | "book" | "rat";
 
 export type BulletEffect = "stun" | "slow" | "burn" | "fear" | "weep" | "ash" | "execute" | "split";
 
@@ -348,6 +354,8 @@ export interface Bullet {
   tint?: number;
   /** Walls it can still glance off (glass shards). */
   bounce?: number;
+  /** Snuffs the flames it passes (the lamplighter's snuffer). */
+  snuff?: boolean;
 }
 
 export type ZoneKind = "fire" | "plague" | "exorcism" | "slam" | "holyfire" | "blast" | "glass" | "trap" | "ink";

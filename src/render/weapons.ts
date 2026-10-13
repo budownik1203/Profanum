@@ -99,6 +99,52 @@ export function drawWeaponShape(g: Graphics, id: WeaponId, x: number, y: number,
       line(-16, 0, L, 0, 3.5, 0xcfc4a8);
       g.circle(...P(L + 4, 0), 7 * s).fill(0xcfc4a8).stroke({ width: 3 * s, color: PAL.ink });
       break;
+    case "ratgun":
+      // a short musket with a wire cage of live rats on the barrel
+      poly([[-12, -3], [6, -3], [6, 4], [-12, 8]], wood);
+      line(4, 0, L, 0, 8, PAL.ink);
+      line(4, 0, L - 1, 0, 4, steel);
+      poly([[L - 22, -9], [L - 6, -9], [L - 6, 7], [L - 22, 7]], 0x3a3028);
+      for (const u of [-19, -14, -9]) line(L + u, -9, L + u, 7, 1.6, 0x8c8a82);
+      g.moveTo(...P(L - 22, 4)).quadraticCurveTo(...P(L - 28, 12), ...P(L - 24, 16)).stroke({ width: 2 * s, color: 0xb88a7a });
+      break;
+    case "sling":
+      // two cords and a leather pouch with a cobble in it
+      line(0, -2, L - 6, -6, 2, 0x8a6a3a);
+      line(0, 2, L - 6, 6, 2, 0x8a6a3a);
+      poly([[L - 8, -7], [L + 4, -5], [L + 4, 5], [L - 8, 7]], 0x6a4a2a);
+      g.circle(...P(L - 1, 0), 4 * s).fill(0x6a6458).stroke({ width: 2 * s, color: PAL.ink });
+      g.circle(...P(-2, 0), 3 * s).fill(0x6a4a2a).stroke({ width: 2 * s, color: PAL.ink });
+      break;
+    case "coingun":
+      // a gilded pistol with a coin slot on the lock
+      poly([[-8, -3], [6, -3], [6, 9], [-2, 10]], 0x3a2416);
+      line(0, -2, L, -2, 8, PAL.ink);
+      line(0, -2, L - 1, -2, 4.5, 0xd8b04a);
+      g.circle(...P(-3, 5), 2.5 * s).fill(0xd8b04a);
+      line(2, -6, 7, -6, 2, PAL.ink);
+      break;
+    case "snuffer":
+      // the lamplighter's pole: a brass snuffing cone and a smouldering wick
+      line(-14, 0, L, 0, 6, PAL.ink);
+      line(-14, 0, L, 0, 3, 0x4a3a28);
+      poly([[L - 4, -4], [L + 8, -9], [L + 8, 9], [L - 4, 4]], 0xa8823e);
+      g.circle(...P(L + 9, 0), 3 * s).fill(PAL.emberHot);
+      break;
+    case "abbotbell":
+      // a heavy hand bell on a turned wooden handle
+      line(-6, 0, 6, 0, 5, PAL.wood);
+      poly([[6, -6], [20, -11], [20, 11], [6, 6]], 0xc8a040);
+      g.circle(...P(22, 0), 2.6 * s).fill(0x8a6a28).stroke({ width: 1.5 * s, color: PAL.ink });
+      break;
+    case "glassgun":
+      // a flared barrel of leaded stained glass
+      poly([[-12, -4], [6, -3], [6, 4], [-12, 8]], wood);
+      poly([[4, -5], [L - 6, -4], [L + 2, -9], [L + 2, 9], [L - 6, 4], [4, 5]], 0x2a4f8c);
+      poly([[10, -4], [16, -4], [16, 4], [10, 4]], PAL.glass[0]);
+      poly([[16, -4], [L - 6, -4], [L - 6, 4], [16, 4]], PAL.glass[2]);
+      poly([[L - 6, -4], [L + 2, -9], [L + 2, 9], [L - 6, 4]], 0x9ad8e8);
+      break;
     default:
       line(0, 0, L, 0, 6, PAL.ink);
   }

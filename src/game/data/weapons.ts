@@ -9,6 +9,8 @@ export type WeaponId =
   | "pistol" | "doublepistol" | "arquebus" | "blunderbuss" | "crossbow"
   | "petronel" | "organ" | "hakownica" | "mortar"
   | "inqcrossbow" | "captainarq"
+  // the bosses' own: each floor's master leaves his weapon behind
+  | "ratgun" | "sling" | "coingun" | "snuffer" | "abbotbell" | "glassgun"
   | "howler" | "ashbook" | "bonestaff"
   // legends
   | "gerwazy" | "lament" | "martyrs" | "headsman";
@@ -62,6 +64,16 @@ export interface WeaponDef {
   lob?: Pick<Lob, "land" | "radius" | "dur" | "height">;
   /** Holy water: double damage to the undead. */
   holy?: boolean;
+  /** Bullets that turn towards the nearest enemy (rad/s). */
+  homing?: number;
+  /** Walls a bullet glances off before it breaks. */
+  bounce?: number;
+  /** Each shot costs this much gold instead of ammunition. */
+  goldCost?: number;
+  /** Bullets snuff the flames they pass. */
+  snuff?: boolean;
+  /** Colour hint for the bullets (stained glass). */
+  tint?: number;
   /** No muzzle flash: does not give the shooter away in the dark. */
   silent?: boolean;
   /** Legends only. */
@@ -140,6 +152,37 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     id: "captainarq", kind: "firearm", rarity: "unique", capacity: 2, reload: 1.8, ammo: 40,
     damage: 10, pierce: 2, spread: 0.01, speed: 1750, radius: 7, life: 1.6, recoil: 22, knock: 60, fireDelay: 0.28,
     look: "ball", price: 110, length: 48,
+  }),
+  // ---------------------------------------------------------------- the bosses' weapons
+  ratgun: W({
+    id: "ratgun", kind: "firearm", rarity: "unique", capacity: 2, reload: 1.6, ammo: 36,
+    damage: 3.4, pellets: 3, fan: 0.5, spread: 0.08, speed: 560, speedJitter: 0.15, radius: 8, life: 2.2, homing: 4, recoil: 18, knock: 20, fireDelay: 0.3,
+    look: "rat", price: 110, length: 34,
+  }),
+  sling: W({
+    id: "sling", kind: "crossbow", rarity: "unique", capacity: 5, reload: 1.1, ammo: 80,
+    damage: 4.5, spread: 0.04, speed: 950, radius: 8, life: 1.3, recoil: 4, knock: 90, fireDelay: 0.18,
+    effect: "stun", effectTime: 0.35, silent: true, look: "stone", price: 90, length: 26,
+  }),
+  coingun: W({
+    id: "coingun", kind: "firearm", rarity: "unique", capacity: 4, reload: 1.0, ammo: Infinity, goldCost: 1,
+    damage: 9, pierce: 2, spread: 0.02, speed: 1400, radius: 7, life: 1.6, recoil: 16, knock: 50, fireDelay: 0.22,
+    look: "coin", price: 120, length: 26,
+  }),
+  snuffer: W({
+    id: "snuffer", kind: "crossbow", rarity: "unique", capacity: 2, reload: 1.2, ammo: 50, snuff: true,
+    damage: 6, pierce: 1, spread: 0.02, speed: 1100, radius: 7, life: 1.5, recoil: 6, knock: 30, fireDelay: 0.25,
+    effect: "burn", effectTime: 2.5, silent: true, look: "ember", price: 100, length: 46,
+  }),
+  abbotbell: W({
+    id: "abbotbell", kind: "occult", rarity: "unique", capacity: 1, reload: 0, ammo: Infinity, soulCost: 2,
+    damage: 3, pellets: 17, fan: Math.PI * 2 * (16 / 17), spread: 0, speed: 620, radius: 14, life: 0.55, recoil: 0, knock: 160, fireDelay: 1.0,
+    effect: "stun", effectTime: 1.0, look: "wave", price: 110, length: 16,
+  }),
+  glassgun: W({
+    id: "glassgun", kind: "firearm", rarity: "unique", capacity: 3, reload: 1.7, ammo: 45, bounce: 2,
+    damage: 4.2, pellets: 3, fan: 0.24, spread: 0.03, speed: 1150, radius: 7, life: 1.8, recoil: 20, knock: 30, fireDelay: 0.28,
+    look: "shard", tint: 0x9ad8e8, price: 115, length: 30,
   }),
   howler: W({
     id: "howler", kind: "occult", rarity: "occult", capacity: 1, reload: 0, ammo: Infinity, soulCost: 2,
