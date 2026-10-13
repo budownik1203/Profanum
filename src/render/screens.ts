@@ -375,7 +375,7 @@ export class Screens {
   }
 
   /** The controls, shown in the crypt and on request. */
-  controls(lines: [string, string][], title: string, y = 190): void {
+  controls(lines: [string, string][], title: string, y = 160): void {
     const w = 520;
     const h = 64 + lines.length * 30;
     const x = 24;

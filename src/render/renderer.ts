@@ -925,8 +925,8 @@ export class GameRenderer {
       const cy = (world.player.pos.y - 30 + oy) * k;
       const R = 110 * k;
       const gr = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R);
-      gr.addColorStop(0, "rgba(0,0,0,0.45)");
-      gr.addColorStop(0.55, "rgba(0,0,0,0.38)");
+      gr.addColorStop(0, "rgba(0,0,0,0.3)");
+      gr.addColorStop(0.55, "rgba(0,0,0,0.25)");
       gr.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = gr;
       ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
