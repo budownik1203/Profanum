@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { World, idleInput, type InputState } from "../src/game/world.js";
 import { CONFIG } from "../src/game/config.js";
 import { makeRng, vec } from "../src/game/math.js";
+import { UNITS } from "../src/game/data/units.js";
+import { WEAPONS } from "../src/game/data/weapons.js";
 
 const DT = 1 / 60;
 const step = (w: World, input: InputState, seconds: number) => {
@@ -96,12 +98,14 @@ test("the necromancer hits softer in light", () => {
   const w = darkRoom();
   w.alarm = true;
   const p = w.player;
+  p.stats.critChance = 0;
   w.addLight("candle", p.pos);
   const g = w.spawn("halberdier", vec(p.pos.x, p.pos.y - 500));
   g.state = "recover";
   g.timer = 999;
-  step(w, { ...idleInput(g.pos), shoot: true }, 0.6);
-  assert.equal(g.hp, CONFIG.halberdier.hp - CONFIG.flintlock.damage * CONFIG.darkness.lightDamageMul);
+  step(w, { ...idleInput(g.pos), shoot: true }, DT);
+  step(w, idleInput(g.pos), 0.6);
+  assert.equal(g.hp, UNITS.halberdier.hp - WEAPONS.pistol.damage * p.stats.lightDamageMul);
 });
 
 test("holy light from stained glass burns the necromancer if he lingers in it", () => {
@@ -110,7 +114,7 @@ test("holy light from stained glass burns the necromancer if he lingers in it", 
   w.addLight("window", w.player.pos, { wall: "N" });
   const ev = step(w, idleInput(), CONFIG.darkness.burnDelay + 0.5);
   assert.ok(ev.some((e) => e.type === "burn"));
-  assert.equal(w.player.halves, CONFIG.player.maxHalves - 1);
+  assert.equal(w.player.halves, w.player.maxHalves - 1);
 });
 
 test("ordinary light only reveals: candles and chandeliers don't burn", () => {
@@ -119,7 +123,7 @@ test("ordinary light only reveals: candles and chandeliers don't burn", () => {
   w.addLight("chandelier", w.player.pos);
   const ev = step(w, idleInput(), CONFIG.darkness.burnDelay + 4);
   assert.ok(!ev.some((e) => e.type === "burn"));
-  assert.equal(w.player.halves, CONFIG.player.maxHalves);
+  assert.equal(w.player.halves, w.player.maxHalves);
 });
 
 test("minions last longer in the dark and crumble faster in light", () => {

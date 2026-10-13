@@ -51,6 +51,15 @@ async function boot(): Promise<void> {
     acc = 0;
   };
 
+  // debug hook for automated browser checks (tools/shot.mjs); harmless in normal play
+  (window as unknown as { __profanum: unknown }).__profanum = {
+    get floor() {
+      return floor;
+    },
+    view,
+    input,
+  };
+
   app.ticker.add((ticker) => {
     const dt = Math.min(0.1, ticker.deltaMS / 1000);
     const aim = view.screenToWorld(input.mouse);

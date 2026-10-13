@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { World, idleInput, type InputState } from "../src/game/world.js";
 import { CONFIG } from "../src/game/config.js";
 import { makeRng, vec } from "../src/game/math.js";
+import { WEAPONS } from "../src/game/data/weapons.js";
+import { enemyBullet } from "./helpers.js";
 
 const DT = 1 / 60;
 const empty = (): World => new World(makeRng(1));
@@ -25,17 +27,18 @@ test("player walks and stays inside the room walls", () => {
   assert.ok(w.player.pos.x <= CONFIG.room.width - CONFIG.room.wall - CONFIG.player.radius + 0.001, "clamped by the wall");
 });
 
-test("flintlock fires once, then must reload", () => {
+test("the flintlock pistol fires its two barrels, then must reload", () => {
   const w = empty();
   const aim = vec(w.player.pos.x, 0);
   const shoot = { ...idleInput(aim), shoot: true };
-  const ev = step(w, shoot, 0.1);
-  assert.equal(ev.filter((e) => e.type === "shot").length, 1, "only one shot while holding the trigger");
-  assert.equal(w.player.weapon.loaded, 0);
-  assert.ok(w.player.weapon.reloadLeft > 0, "reload started automatically");
-  const ev2 = step(w, idleInput(aim), CONFIG.flintlock.reload + 0.05);
+  const ev = step(w, shoot, 0.5);
+  assert.equal(ev.filter((e) => e.type === "shot").length, 2, "two shots, then the gun is empty");
+  const slot = w.player.weapons[0];
+  assert.equal(slot.loaded, 0);
+  assert.ok(slot.reloadLeft > 0, "reload started automatically");
+  const ev2 = step(w, idleInput(aim), WEAPONS.pistol.reload + 0.05);
   assert.ok(ev2.some((e) => e.type === "reloadDone"));
-  assert.equal(w.player.weapon.loaded, 1);
+  assert.equal(slot.loaded, 2);
 });
 
 test("two pistol shots kill a halberdier", () => {
@@ -46,7 +49,7 @@ test("two pistol shots kill a halberdier", () => {
   const shoot = { ...idleInput(e.pos), shoot: true };
   let events = step(w, shoot, 0.6);
   assert.ok(events.some((x) => x.type === "enemyHit"));
-  events = step(w, shoot, CONFIG.flintlock.reload + 0.6);
+  events = step(w, shoot, WEAPONS.pistol.reload + 0.6);
   assert.ok(events.some((x) => x.type === "enemyDeath"));
   assert.ok(events.some((x) => x.type === "roomCleared"));
 });
@@ -54,19 +57,19 @@ test("two pistol shots kill a halberdier", () => {
 test("dodge makes the player immune to a bullet", () => {
   const w = empty();
   const p = w.player;
-  w.bullets.push({ pos: vec(p.pos.x - 80, p.pos.y), vel: vec(600, 0), radius: 9, damage: 1, from: "enemy", life: 2 });
+  w.bullets.push(enemyBullet(vec(p.pos.x - 80, p.pos.y), vec(600, 0), { life: 2 }));
   step(w, { ...idleInput(), dodge: true }, DT);
   step(w, idleInput(), 0.2);
-  assert.equal(p.halves, CONFIG.player.maxHalves, "no damage while dissolved into mist");
+  assert.equal(p.halves, w.player.maxHalves, "no damage while dissolved into mist");
 });
 
 test("an enemy bullet costs half a heart and grants invulnerability", () => {
   const w = empty();
   const p = w.player;
-  w.bullets.push({ pos: vec(p.pos.x - 80, p.pos.y), vel: vec(600, 0), radius: 9, damage: 1, from: "enemy", life: 2 });
-  w.bullets.push({ pos: vec(p.pos.x - 140, p.pos.y), vel: vec(600, 0), radius: 9, damage: 1, from: "enemy", life: 2 });
+  w.bullets.push(enemyBullet(vec(p.pos.x - 80, p.pos.y), vec(600, 0), { life: 2 }));
+  w.bullets.push(enemyBullet(vec(p.pos.x - 140, p.pos.y), vec(600, 0), { life: 2 }));
   step(w, idleInput(), 0.4);
-  assert.equal(p.halves, CONFIG.player.maxHalves - 1, "second bullet passes during invulnerability");
+  assert.equal(p.halves, w.player.maxHalves - 1, "second bullet passes during invulnerability");
 });
 
 test("a toppled pew stops bullets and breaks after enough hits", () => {
@@ -76,10 +79,10 @@ test("a toppled pew stops bullets and breaks after enough hits", () => {
   step(w, { ...idleInput(), flip: true }, DT);
   assert.ok(c.flipped, "pew toppled with the flip key");
   for (let i = 0; i < 20 && !c.broken; i++) {
-    w.bullets.push({ pos: vec(p.pos.x, p.pos.y - 400), vel: vec(0, 600), radius: 9, damage: 1, from: "enemy", life: 3 });
+    w.bullets.push(enemyBullet(vec(p.pos.x, p.pos.y - 400), vec(0, 600), { life: 3 }));
     step(w, idleInput(), 0.6);
   }
-  assert.equal(p.halves, CONFIG.player.maxHalves, "cover absorbed every bullet");
+  assert.equal(p.halves, w.player.maxHalves, "cover absorbed every bullet");
   assert.ok(c.broken, "cover eventually breaks");
 });
 
@@ -89,9 +92,9 @@ test("an unflipped pew blocks walking but not bullets", () => {
   const c = w.addCover(p.pos.x + 40, p.pos.y - 100, 40, 200);
   step(w, { ...idleInput(), move: vec(1, 0) }, 1);
   assert.ok(p.pos.x <= c.x - CONFIG.player.radius + 0.5, "stopped by the pew");
-  w.bullets.push({ pos: vec(c.x + 200, p.pos.y), vel: vec(-600, 0), radius: 9, damage: 1, from: "enemy", life: 2 });
+  w.bullets.push(enemyBullet(vec(c.x + 200, p.pos.y), vec(-600, 0), { life: 2 }));
   step(w, idleInput(), 0.6);
-  assert.equal(p.halves, CONFIG.player.maxHalves - 1, "bullet flew over the standing pew");
+  assert.equal(p.halves, w.player.maxHalves - 1, "bullet flew over the standing pew");
 });
 
 test("halberdier winds up, charges and hits", () => {
@@ -108,7 +111,7 @@ test("arquebusier keeps its distance and shoots", () => {
   const p = w.player;
   const e = w.spawn("arquebusier", vec(p.pos.x + 150, p.pos.y));
   const events = step(w, idleInput(), 4);
-  assert.ok(events.some((x) => x.type === "shot" && x.from === "enemy"), "fires at the player");
+  assert.ok(events.some((x) => x.type === "shot" && x.side === "enemy"), "fires at the player");
   assert.ok(Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) > 250, "backed off to range");
 });
 

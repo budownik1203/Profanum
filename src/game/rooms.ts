@@ -186,10 +186,7 @@ export function applyBoss(w: World): void {
     ["chandelier", 900, 560], ["window", 500, 210], ["window", 1300, 210],
     ["candelabra", 450, 700], ["candelabra", 1350, 700], ["torch", 92, 230], ["torch", 1708, 230],
   ]);
-  const captain = w.spawn("halberdier", vec(900, 300));
-  captain.elite = true;
-  captain.hp = captain.maxHp = CONFIG.halberdier.hp * 4;
-  captain.radius = 30;
+  w.spawn("halberdier", vec(900, 300), "enemy", { elite: true });
   w.spawn("arquebusier", vec(400, 260));
   w.spawn("arquebusier", vec(1400, 260));
   w.spawn("halberdier", vec(600, 300));

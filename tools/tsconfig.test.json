@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.test.json",
+  "compilerOptions": {
+    "typeRoots": ["/opt/npm-tools/node_modules/@types"],
+    "outDir": "../.test-build",
+    "rootDir": ".."
+  },
+  "include": ["../src/game", "../tests"]
+}

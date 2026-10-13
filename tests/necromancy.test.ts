@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { World, idleInput, type InputState, type Unit } from "../src/game/world.js";
 import { CONFIG } from "../src/game/config.js";
 import { makeRng, vec } from "../src/game/math.js";
+import { enemyBullet } from "./helpers.js";
 
 const DT = 1 / 60;
 const step = (w: World, input: InputState, seconds: number) => {
@@ -54,7 +55,7 @@ test("an uncollected soul fades away", () => {
 test("E raises a fresh corpse into a minion of the same kind, for a soul", () => {
   const w = worldWithFreshCorpse();
   w.player.souls = 1;
-  const ev = step(w, { ...idleInput(), raise: true }, DT);
+  const ev = step(w, { ...idleInput(), interact: true }, DT);
   assert.ok(ev.some((e) => e.type === "raise"));
   assert.equal(w.minions.length, 1);
   assert.equal(w.minions[0].kind, "halberdier");
@@ -65,11 +66,11 @@ test("E raises a fresh corpse into a minion of the same kind, for a soul", () =>
 test("raising needs souls and respects the minion limit", () => {
   const w = worldWithFreshCorpse();
   w.player.souls = 0;
-  let ev = step(w, { ...idleInput(), raise: true }, DT);
+  let ev = step(w, { ...idleInput(), interact: true }, DT);
   assert.ok(ev.some((e) => e.type === "raiseFail" && e.reason === "noSouls"));
   w.player.souls = 10;
-  for (let i = 0; i < CONFIG.necro.minionLimit; i++) w.spawn("halberdier", vec(300 + i * 60, 300), "minion");
-  ev = step(w, { ...idleInput(), raise: true }, DT);
+  for (let i = 0; i < w.player.stats.minionLimit; i++) w.spawn("halberdier", vec(300 + i * 60, 300), "minion");
+  ev = step(w, { ...idleInput(), interact: true }, DT);
   assert.ok(ev.some((e) => e.type === "raiseFail" && e.reason === "limit"));
 });
 
@@ -77,7 +78,7 @@ test("a corpse can't be raised once its echo has faded", () => {
   const w = worldWithFreshCorpse();
   w.player.souls = 1;
   step(w, idleInput(), CONFIG.necro.echo + 0.1);
-  const ev = step(w, { ...idleInput(), raise: true }, DT);
+  const ev = step(w, { ...idleInput(), interact: true }, DT);
   assert.ok(!ev.some((e) => e.type === "raise"));
   assert.equal(w.corpses.length, 1, "the body stays as decoration");
 });
@@ -91,12 +92,12 @@ test("minions crumble after their lifetime and can be raised once more", () => {
   const ev = step(w, idleInput(), 0.6);
   assert.ok(ev.some((e) => e.type === "minionDeath" && e.crumbled));
   assert.equal(w.corpses.length, 1);
-  step(w, { ...idleInput(), raise: true }, DT);
+  step(w, { ...idleInput(), interact: true }, DT);
   assert.equal(w.minions.length, 1, "raised for the second time");
   const second = w.minions[0];
   second.lifetime = 0.2;
   step(w, idleInput(), 0.3);
-  step(w, { ...idleInput(), raise: true }, DT);
+  step(w, { ...idleInput(), interact: true }, DT);
   assert.equal(w.minions.length, 0, "a body raised twice stays dead");
 });
 
@@ -108,7 +109,7 @@ test("a raised halberdier charges the guards, not the player", () => {
   w.spawn("halberdier", vec(p.pos.x + 60, p.pos.y), "minion");
   const ev = step(w, idleInput(), 6);
   assert.ok(ev.some((e) => e.type === "enemyDeath" || e.type === "enemyHit"), "minion hurt the guard");
-  assert.equal(p.halves, CONFIG.player.maxHalves, "the player was never hit");
+  assert.equal(p.halves, w.player.maxHalves, "the player was never hit");
 });
 
 test("guards attack the nearest target, including minions", () => {
@@ -119,7 +120,7 @@ test("guards attack the nearest target, including minions", () => {
   w.spawn("halberdier", vec(p.pos.x, p.pos.y - 600));
   const ev = step(w, idleInput(), 4);
   assert.ok(ev.some((e) => e.type === "minionHit" || e.type === "minionDeath"), "the guard went for the closer minion");
-  assert.equal(p.halves, CONFIG.player.maxHalves);
+  assert.equal(p.halves, w.player.maxHalves);
 });
 
 test("a minion standing in the line of fire soaks an enemy bullet", () => {
@@ -127,9 +128,9 @@ test("a minion standing in the line of fire soaks an enemy bullet", () => {
   const p = w.player;
   const shield = w.spawn("halberdier", vec(p.pos.x - 60, p.pos.y), "minion");
   freeze(shield);
-  w.bullets.push({ pos: vec(p.pos.x - 200, p.pos.y), vel: vec(600, 0), radius: 9, damage: 1, from: "enemy", life: 2 });
+  w.bullets.push(enemyBullet(vec(p.pos.x - 200, p.pos.y), vec(600, 0), { life: 2 }));
   step(w, idleInput(), 0.5);
-  assert.equal(p.halves, CONFIG.player.maxHalves, "the minion took the bullet");
+  assert.equal(p.halves, w.player.maxHalves, "the minion took the bullet");
   assert.ok(shield.hp < shield.maxHp);
 });
 

@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": { "pixi.js": ["./pixi-stub/pixi.js/index.d.ts"] }
+  },
+  "include": ["../src"]
+}

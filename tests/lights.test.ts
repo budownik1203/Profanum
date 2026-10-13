@@ -6,6 +6,7 @@ import { Floor } from "../src/game/floor.js";
 import { COMBAT_LAYOUTS, applyLayout } from "../src/game/rooms.js";
 import { CONFIG } from "../src/game/config.js";
 import { makeRng, vec } from "../src/game/math.js";
+import { WEAPONS } from "../src/game/data/weapons.js";
 
 const DT = 1 / 60;
 const step = (w: World, input: InputState, seconds: number): GameEvent[] => {
@@ -23,7 +24,7 @@ const freeze = (u: Unit) => {
 /** Fire one shot at a point and let the bullet fly; then wait for the reload. */
 const shootAt = (w: World, at: { x: number; y: number }): GameEvent[] => {
   const ev = step(w, { ...idleInput(at), shoot: true }, DT);
-  ev.push(...step(w, idleInput(at), CONFIG.flintlock.reload + 0.1));
+  ev.push(...step(w, idleInput(at), WEAPONS.pistol.reload + 0.1));
   return ev;
 };
 
@@ -70,7 +71,7 @@ test("the necromancer standing under the falling chandelier gets hit too", () =>
   const ch = w.addLight("chandelier", vec(w.player.pos.x, w.player.pos.y + 60));
   ch.hp = 1;
   step(w, { ...idleInput(World.hitPoint(ch)), shoot: true }, CONFIG.chandelier.fallTime + 0.2);
-  assert.equal(w.player.halves, CONFIG.player.maxHalves - 1);
+  assert.equal(w.player.halves, w.player.maxHalves - 1);
 });
 
 test("a shot through stained glass rains shards on the guards below and ends the holy light", () => {
