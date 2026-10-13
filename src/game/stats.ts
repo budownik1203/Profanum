@@ -78,9 +78,11 @@ export function giveWeapon(p: Player, id: WeaponId): "new" | "ammo" {
     slot.ammo = maxAmmo(p, slot);
     return "ammo";
   }
-  p.weapons.push(makeSlot(id));
+  const slot = makeSlot(id);
+  p.weapons.push(slot);
   p.current = p.weapons.length - 1;
   recomputeStats(p);
+  if (Number.isFinite(slot.ammo)) slot.ammo = maxAmmo(p, slot);
   return "new";
 }
 

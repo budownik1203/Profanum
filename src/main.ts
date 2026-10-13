@@ -3,18 +3,18 @@
  * simulation loop, saving, pause and options. The simulation lives in src/game, the view in src/render.
  */
 import { Application } from "pixi.js";
-import { CHARACTERS, UNLOCKABLES, type CharacterId } from "./game/data/items.js";
+import { CHARACTERS, RELICS, UNLOCKABLES, type CharacterId } from "./game/data/items.js";
 import { WEAPONS } from "./game/data/weapons.js";
 import { ITEMS } from "./game/data/items.js";
 import type { Floor } from "./game/floor.js";
 import { buildHub } from "./game/hub.js";
-import { altarOffer, interactTarget, shopPrice } from "./game/loot.js";
+import { altarOffer, interactTarget, placePickup, shopPrice } from "./game/loot.js";
 import {
   buyCharacter, buyUnlock, characterState, clearRun, finishRun, loadMeta, loadRun, makeStore, poolOf, saveMeta, saveRun, type Meta,
 } from "./game/meta.js";
 import { Run } from "./game/run.js";
 import { giveItem, giveRelic, giveWeapon, makePlayer } from "./game/stats.js";
-import type { GameEvent, InputState } from "./game/types.js";
+import type { GameEvent, InputState, PickupKind, Player } from "./game/types.js";
 import { World, idleInput } from "./game/world.js";
 import { CONFIG } from "./game/config.js";
 import { setLang, soulsWord, t } from "./i18n.js";
@@ -23,8 +23,9 @@ import { Narrator, SKULL, lineOf } from "./narrator.js";
 import { noteText } from "./notes.js";
 import { PAL } from "./palette.js";
 import { drawHud } from "./render/hud.js";
+import { drawItemIcon, drawRelicIcon } from "./render/icons.js";
 import { GameRenderer, type Prompt } from "./render/renderer.js";
-import { Screens, type MenuView } from "./render/screens.js";
+import { Screens, type InvRow, type InvSection, type MenuView } from "./render/screens.js";
 import type { ItemId, RelicId } from "./game/data/items.js";
 import type { WeaponId } from "./game/data/weapons.js";
 
@@ -363,6 +364,15 @@ async function boot(): Promise<void> {
         case "bossDeath":
           showBanner(t("banner.bossDown", { name: t(`unit.${e.boss}`) }), undefined, 3);
           break;
+        case "synergy":
+          showBanner(t(`synergy.${e.id}`), t(`synergyDesc.${e.id}`), 3.5);
+          break;
+        case "itemGet":
+          // what was just picked up, and what it does
+          if (e.kind === "item") showBanner(t(`item.${e.item}`), t(`itemDesc.${e.item}`), 2.6);
+          else if (e.kind === "relic") showBanner(t(`relic.${e.item}`), t(`relicDesc.${e.item}`), 2.6);
+          else if (e.kind === "weapon") showBanner(t(`weapon.${e.item}`), t(`weaponDesc.${e.item}`), 2.6);
+          break;
         case "note":
           note = noteText(e.index);
           overlay = "note";
@@ -466,6 +476,11 @@ async function boot(): Promise<void> {
     advance(seconds: number) {
       if (!run) return;
       for (let i = 0; i < Math.round(seconds / STEP); i++) react(run.update(STEP, idleInput(run.world.player.pos)), run.world);
+    },
+    /** Put a pickup on the floor (screenshots of every item). */
+    drop(kind: string, ref: string, x: number, y: number) {
+      const w = world();
+      if (w) placePickup(w, kind as PickupKind, { x, y }, 1, ref);
     },
     place(x: number, y: number) {
       const w = world();
@@ -615,6 +630,10 @@ async function boot(): Promise<void> {
       }
     } else if (overlay === "pause") {
       screens.dim(0.5);
+      if (mode === "run" && run) {
+        screens.inventory(t("inv.title"), inventorySections(run.player), (n) => t("inv.more", { n }));
+        screens.controls(CONTROLS(), t("legend.title"));
+      }
       const m = pauseMenu();
       runMenu(m.items.length, screens.menu(m, mouse), pauseAction);
       if (esc) overlay = null;
@@ -640,6 +659,41 @@ async function boot(): Promise<void> {
     screens.end();
     input.endFrame();
   });
+}
+
+/** The pause screen's list of what the necromancer carries. */
+function inventorySections(p: Player): InvSection[] {
+  const weapons: InvRow[] = p.weapons.map((s, i) => {
+    const def = WEAPONS[s.id];
+    return {
+      name: `${i === p.current ? "▸ " : ""}${t(`weapon.${s.id}`)}`,
+      detail: t(`weaponDesc.${s.id}`),
+      right: def.kind === "occult" ? t("hud.cost", { n: def.soulCost ?? 1, w: soulsWord(def.soulCost ?? 1) }) : Number.isFinite(s.ammo) ? `${s.ammo}` : "∞",
+      color: def.rarity === "legend" ? 0xc88aff : i === p.current ? 0xf4e2c8 : undefined,
+    };
+  });
+  const counts = new Map<string, number>();
+  for (const id of p.items) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const items: InvRow[] = [...counts].map(([id, n]) => ({
+    name: t(`item.${id}`) + (n > 1 ? ` ×${n}` : ""),
+    detail: t(`itemDesc.${id}`),
+    icon: (g, x, y) => drawItemIcon(g, id as ItemId, x, y, 0.8),
+  }));
+  const sections: InvSection[] = [{ title: t("inv.weapons"), rows: weapons }];
+  if (p.relic) {
+    const relic = p.relic.id;
+    sections.push({
+      title: t("inv.relic"),
+      rows: [{ name: t(`relic.${relic}`), detail: t(`relicDesc.${relic}`), right: `${p.relic.charge}/${RELICS[relic].charge}`, icon: (g, x, y) => drawRelicIcon(g, relic, x, y, 0.8) }],
+    });
+  }
+  if (p.remains.length) sections.push({ title: t("inv.remains"), rows: p.remains.map((id) => ({ name: t("remains", { name: t(`weapon.${id}`) }), detail: t("remainsDesc"), color: 0xc88aff })) });
+  if (p.stats.synergies.length) {
+    sections.push({ title: t("inv.synergies"), rows: p.stats.synergies.map((id) => ({ name: t(`synergy.${id}`), detail: t(`synergyDesc.${id}`), color: 0xe0c0ff })) });
+  }
+  // the items last: a long list is the one that may not fit
+  sections.push({ title: t("inv.items"), rows: items.length ? items : [{ name: t("inv.none"), color: PAL.hudDim }] });
+  return sections;
 }
 
 const CONTROLS = (): [string, string][] => [

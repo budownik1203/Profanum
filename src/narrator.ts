@@ -36,6 +36,10 @@ const LINES: Record<string, Line[]> = {
   ],
   legend: [["Przeklęta broń otwiera oczy. Ma swoje żądania.", "The cursed weapon opens its eyes. It has demands."]],
   ritual: [["Krew sługi wsiąka w żelazo. Legenda dojrzewa.", "The minion's blood soaks into the iron. The legend ripens."]],
+  synergy: [
+    ["Dwie przeklęte rzeczy zaczynają ze sobą szeptać.", "Two cursed things begin to whisper to each other."],
+    ["Razem brzmią gorzej. Czyli lepiej.", "Together they sound worse. Which is to say, better."],
+  ],
   abomination: [["Z wielu ciał jedno. Kościół nazwałby to bluźnierstwem. Ty nazywasz to rzemiosłem.", "From many bodies, one. The Church calls it blasphemy. You call it craft."]],
   chandelier: [["Niech światło spadnie im na głowy.", "Let the light fall upon their heads."]],
   window: [["Święte szkło sypie się jak grzechy.", "Holy glass falls like sins."]],
@@ -150,6 +154,9 @@ export class Narrator {
           break;
         case "ritual":
           this.say("ritual", 0, true);
+          break;
+        case "synergy":
+          this.say("synergy", 0, true);
           break;
         case "abomination":
           this.say("abomination", 30);

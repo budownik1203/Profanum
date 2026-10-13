@@ -10,6 +10,8 @@ import type { Chest, Cover, Door, Interactable, Light, Pickup, Zone } from "../g
 import { World } from "../game/world.js";
 import { PAL } from "../palette.js";
 import { drawWeaponShape } from "./weapons.js";
+import { drawItemIcon, drawRelicIcon } from "./icons.js";
+import type { ItemId, RelicId } from "../game/data/items.js";
 
 export const OUT = 5; // ink outline width
 
@@ -612,13 +614,11 @@ export function drawPickup(g: Graphics, glow: Graphics, p: Pickup, t: number): v
       break;
     case "item":
       glow.circle(x, y, 26).fill({ color: PAL.soul, alpha: 0.1 + 0.05 * Math.sin(t * 3) });
-      g.roundRect(x - 14, y - 16, 28, 32, 6).fill(0x5a4632).stroke({ width: 3, color: PAL.ink });
-      g.circle(x, y - 2, 7).fill(0xd8c8a0).stroke({ width: 2, color: PAL.ink });
+      drawItemIcon(g, p.ref as ItemId, x, y, 1.1);
       break;
     case "relic":
       glow.circle(x, y, 28).fill({ color: 0xf4e2a8, alpha: 0.14 + 0.06 * Math.sin(t * 3) });
-      g.poly([x, y - 20, x + 14, y - 4, x + 8, y + 16, x - 8, y + 16, x - 14, y - 4]).fill(0xd8b04a).stroke({ width: 3, color: PAL.ink });
-      g.circle(x, y - 2, 5).fill(0x9e1f14);
+      drawRelicIcon(g, p.ref as RelicId, x, y, 1.15);
       break;
     case "remains":
       glow.circle(x, y, 30).fill({ color: 0x9a5ac8, alpha: 0.18 + 0.06 * Math.sin(t * 3) });

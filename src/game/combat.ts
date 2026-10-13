@@ -492,6 +492,11 @@ export function updateBullets(w: World, dt: number): void {
         knock: b.knock,
         execute: b.effect === "execute" ? b.effectTime : undefined,
       });
+      if (b.fromPlayer && w.player.stats.synergies.includes("koncert")) {
+        // the scream and the teeth together: the howl makes them weep, the teeth make them flee
+        if (b.weapon === "howler") applyEffect(u, "weep", 2.5);
+        if (b.weapon === "lament") applyEffect(u, "fear", 1.2);
+      }
       if (b.blast) explode(w, to, b.blast, b.damage * 0.5, b.side, b.fromPlayer);
       if (b.effect === "split" && !b.hit) {
         // Saint Gervase in the dark: the holy water splits into three

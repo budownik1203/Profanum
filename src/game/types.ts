@@ -131,6 +131,8 @@ export interface Player {
   alive: boolean;
   /** Kills by the necromancer's own side this run (for the grimoire and statistics). */
   kills: number;
+  /** Synergies already announced (a new one gets its moment on screen). */
+  seenSynergies?: string[];
 }
 
 // ------------------------------------------------------------------ units
@@ -507,6 +509,7 @@ export type GameEvent =
   | { type: "relicReady"; relic: RelicId }
   | { type: "relicNotReady" }
   | { type: "itemGet"; pos: Vec; item: string; kind: "weapon" | "item" | "relic" | "remains" }
+  | { type: "synergy"; pos: Vec; id: string }
   | { type: "legend"; pos: Vec; legend: LegendId }
   | { type: "ritual"; pos: Vec; form: RitualForm }
   | { type: "abomination"; pos: Vec; corpses: number }

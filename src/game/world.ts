@@ -8,6 +8,7 @@
  * relics.ts (active relics and the witch's rope).
  */
 import { CONFIG } from "./config.js";
+import { WEAPONS } from "./data/weapons.js";
 import { type Rect, type Vec, add, angleOf, circleHitsRect, clamp, dist, fromAngle, len, norm, pushOutOfRect, scale, sub, vec } from "./math.js";
 import { UNITS, teamOf, type UnitKind } from "./data/units.js";
 import type {
@@ -377,6 +378,14 @@ export class World {
     const open = this.doorsOpen;
     if (this.wasOpen && !open && this.doors.length > 0) this.events.push({ type: "doorsShut" });
     this.wasOpen = open;
+    // a synergy that just came together gets its moment on screen
+    const p = this.player;
+    const seen = (p.seenSynergies ??= []);
+    for (const id of p.stats.synergies) {
+      if (seen.includes(id)) continue;
+      seen.push(id);
+      this.events.push({ type: "synergy", pos: { ...p.pos }, id });
+    }
   }
 
   // ---------------------------------------------------------------- doors
@@ -477,7 +486,8 @@ export class World {
         if (slot && slot.reloadLeft > 0) slot.reloadLeft = 0.01;
       }
     }
-    const heavy = p.weapons[p.current]?.id === "headsman" ? CONFIG.curses.heavySpeedMul : 1;
+    const inHand = p.weapons[p.current];
+    const heavy = inHand && WEAPONS[inHand.id].curse === "heavy" ? CONFIG.curses.heavySpeedMul : 1;
     if (p.dodgeLeft > 0) {
       p.dodgeLeft -= dt;
       p.vel = scale(p.dodgeDir, cfg.speed * CONFIG.dodge.speedMul);

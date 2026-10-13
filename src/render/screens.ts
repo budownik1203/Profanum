@@ -29,6 +29,20 @@ export interface ListRow {
   state: "available" | "bought" | "locked";
 }
 
+export interface InvRow {
+  name: string;
+  detail?: string;
+  right?: string;
+  color?: number;
+  /** Draws a small icon centred on (x, y). */
+  icon?: (g: Graphics, x: number, y: number) => void;
+}
+
+export interface InvSection {
+  title: string;
+  rows: InvRow[];
+}
+
 export class Screens {
   readonly layer = new Container();
   private g = new Graphics();
@@ -167,6 +181,52 @@ export class Screens {
     this.tx.text(title, VIEW_W / 2, y + 36, { size: 36, font: "display", color: accent, align: "center" }, 0.5, 0.5);
     lines.forEach((l, i) => this.tx.text(l, VIEW_W / 2, y + 78 + i * 32, { size: 21, align: "center", wrap: w - 60 }, 0.5, 0.5));
     this.tx.text(footer, VIEW_W / 2, y + h - 26, { size: 22, color: PAL.ember, align: "center" }, 0.5, 0.5);
+  }
+
+  /** What the necromancer carries (on the pause screen, to the right of the menu). */
+  inventory(title: string, sections: InvSection[], more: (n: number) => string): void {
+    const w = 560;
+    const x = VIEW_W - w - 24;
+    const y = 24;
+    const maxH = VIEW_H - 48;
+    // lay out first, to know how tall the frame is and what does not fit
+    const lines: { kind: "head" | "row"; s?: InvSection; r?: InvRow; h: number }[] = [];
+    for (const sec of sections) {
+      lines.push({ kind: "head", s: sec, h: 40 });
+      for (const r of sec.rows) {
+        // a rough count of the wrapped lines of the description (15 px serif ≈ 7.2 px a letter)
+        const perLine = Math.floor((w - 80 - (r.icon ? 44 : 0)) / 7.2);
+        const rows = r.detail ? Math.ceil(r.detail.length / perLine) : 0;
+        lines.push({ kind: "row", r, h: 32 + rows * 19 });
+      }
+    }
+    let used = 70;
+    let shown = 0;
+    for (const l of lines) {
+      if (used + l.h > maxH - 40) break;
+      used += l.h;
+      shown += 1;
+    }
+    const hidden = lines.slice(shown).filter((l) => l.kind === "row").length;
+    const h = Math.min(maxH, used + (hidden > 0 ? 40 : 16));
+    frame(this.g, x, y, w, h, 0.9);
+    this.tx.text(title, x + 28, y + 18, { size: 34, font: "display" });
+    let cy = y + 70;
+    for (const l of lines.slice(0, shown)) {
+      if (l.kind === "head") {
+        this.tx.text(l.s!.title, x + 28, cy + 10, { size: 20, color: PAL.ember, bold: true });
+        this.g.moveTo(x + 28, cy + 36).lineTo(x + w - 28, cy + 36).stroke({ width: 1, color: PAL.hudDim, alpha: 0.5 });
+      } else {
+        const r = l.r!;
+        const ix = r.icon ? 44 : 0;
+        if (r.icon) r.icon(this.g, x + 52, cy + (r.detail ? 24 : 14));
+        this.tx.text(r.name, x + 36 + ix, cy + 4, { size: 21, color: r.color ?? PAL.hudText, font: "display" });
+        if (r.right) this.tx.text(r.right, x + w - 32, cy + 6, { size: 18, color: PAL.hudDim, align: "right" }, 1, 0);
+        if (r.detail) this.tx.text(r.detail, x + 36 + ix, cy + 28, { size: 15, color: PAL.hudDim, wrap: w - 80 - ix });
+      }
+      cy += l.h;
+    }
+    if (hidden > 0) this.tx.text(more(hidden), x + 36, cy + 6, { size: 18, color: PAL.hudDim });
   }
 
   /** The controls, shown in the crypt and on request. */

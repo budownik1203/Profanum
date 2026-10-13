@@ -188,4 +188,5 @@ function restorePlayer(p: Player, s: SavedRun): void {
   if (p.weapons.length === 0) p.weapons = [{ id: CHARACTERS[p.character].weapon, loaded: 1, ammo: Infinity, reloadLeft: 0, cooldown: 0, starter: true }];
   for (const w of p.weapons) w.loaded = WEAPONS[w.id].kind === "occult" ? 1 : Math.min(WEAPONS[w.id].capacity, w.ammo);
   recomputeStats(p);
+  p.seenSynergies = [...p.stats.synergies]; // announced back when they came together
 }

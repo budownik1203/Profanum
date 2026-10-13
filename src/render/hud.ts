@@ -5,7 +5,7 @@
  */
 import type { Graphics } from "pixi.js";
 import { CONFIG } from "../game/config.js";
-import { RELICS } from "../game/data/items.js";
+import { RELICS, type ItemId } from "../game/data/items.js";
 import { WEAPONS } from "../game/data/weapons.js";
 import type { Floor } from "../game/floor.js";
 import { boundMinions } from "../game/loot.js";
@@ -17,6 +17,7 @@ import { PAL } from "../palette.js";
 import { heartShape } from "./env.js";
 import type { TextPool } from "./text.js";
 import { drawWeaponShape } from "./weapons.js";
+import { drawItemIcon, drawRelicIcon } from "./icons.js";
 
 export const VIEW_W = 1920;
 export const VIEW_H = 1080;
@@ -142,13 +143,27 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
   if (p.relic) {
     const def = RELICS[p.relic.id];
     const ready = p.relic.charge >= def.charge;
-    g.poly([rx + 40, ry + 26, rx + 58, ry + 46, rx + 50, ry + 76, rx + 30, ry + 76, rx + 22, ry + 46]).fill(ready ? 0xd8b04a : 0x7a6a4a).stroke({ width: 3, color: PAL.ink });
+    if (ready) g.circle(rx + 40, ry + 50, 30).fill({ color: 0xf4e2a8, alpha: 0.12 });
+    drawRelicIcon(g, p.relic.id, rx + 40, ry + 50, 1.25);
     tx.text(t(`relic.${p.relic.id}`), rx + 78, ry + 14, { size: 21, color: ready ? 0xf4e2a8 : PAL.hudText, font: "display" });
     for (let i = 0; i < def.charge; i++) g.rect(rx + 80 + i * 26, ry + 48, 20, 12).fill(i < p.relic.charge ? PAL.ember : 0x2a2420).stroke({ width: 2, color: PAL.ink });
     if (ready) tx.text(t("hud.relicReady"), rx + 80 + def.charge * 26 + 8, ry + 42, { size: 18, color: PAL.ember });
   } else {
     tx.text(t("hud.noRelic"), rx + 22, ry + 20, { size: 20, color: PAL.hudDim });
   }
+  // the passive items, a row of small ink icons above the relic
+  const counts = new Map<ItemId, number>();
+  for (const id of p.items) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const list = [...counts];
+  const perRow = 9;
+  list.slice(0, perRow * 2).forEach(([id, n], i) => {
+    const ix = rx + 2 + (i % perRow) * 41;
+    const iy = ry - 46 - Math.floor(i / perRow) * 42;
+    g.rect(ix, iy, 36, 36).fill({ color: PAL.ink, alpha: 0.72 }).stroke({ width: 2, color: 0x3a302a });
+    drawItemIcon(g, id, ix + 18, iy + 18, 0.75);
+    if (n > 1) tx.text(`×${n}`, ix + 34, iy + 20, { size: 13, color: PAL.hudText, align: "right", stroke: true }, 1, 0);
+  });
+  if (list.length > perRow * 2) tx.text(`+${list.length - perRow * 2}`, rx + 2, ry - 46 - 2 * 42 + 10, { size: 16, color: PAL.hudDim });
   const minions = boundMinions(w);
   tx.text(`${t("hud.minions")}: ${minions}/${p.stats.minionLimit}`, rx + 22, ry + 82, { size: 22, color: minions > 0 ? PAL.ember : PAL.hudText });
   if (p.character === "wiedzma") {

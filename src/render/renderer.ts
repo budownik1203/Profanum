@@ -368,6 +368,11 @@ export class GameRenderer {
           this.floatText(e.pos, t("float.legend"), 0xc88aff, 34, 2);
           this.addShake(14);
           break;
+        case "synergy":
+          for (let i = 0; i < 50; i++) this.spawn(e.pos, rnd(-260, 260), rnd(-320, 40), rnd(0.4, 1.1), rnd(2, 4.5), i % 2 ? 0xc88aff : PAL.emberHot, "spark");
+          this.floatText({ x: e.pos.x, y: e.pos.y - 40 }, t("float.synergy", { name: t(`synergy.${e.id}`) }), 0xe0c0ff, 30, 2.4);
+          this.addShake(8);
+          break;
         case "ritual":
           for (let i = 0; i < 40; i++) this.spawn(e.pos, rnd(-200, 200), rnd(-300, 0), rnd(0.4, 1), rnd(2, 5), 0x9e1f14, "spark");
           this.floatText(e.pos, t("float.ritual"), 0xc88aff, 30, 2);
