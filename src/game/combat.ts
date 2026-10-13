@@ -57,7 +57,14 @@ export interface HitOpts {
 /** Bosses fight for the light (design doc): in light they shrug hits off, in the dark they bleed. */
 export function bossTakenMul(w: World, u: Unit): number {
   if (!u.def.boss) return 1;
-  return w.isLit(u.pos, false) ? 0.75 : 1.3;
+  // the Holy Flame is shielded while its braziers burn
+  if (u.boss?.mem.shield) return 0.4;
+  return bossLit(w, u) ? 0.75 : 1.3;
+}
+
+/** Is a boss standing in light, not counting the glow it carries itself? */
+export function bossLit(w: World, u: Unit): boolean {
+  return w.lights.some((l) => l.on && l.owner !== u.id && l.kind !== "flash" && dist(l.pos, u.pos) < l.radius);
 }
 
 export function damageUnit(w: World, u: Unit, amount: number, dir: Vec, o: HitOpts = {}): void {
@@ -244,6 +251,11 @@ function zoneHurts(z: Zone, team: Team, undead: boolean): boolean {
 function zoneBurst(w: World, z: Zone): void {
   if (z.kind === "exorcism") w.events.push({ type: "exorcism", pos: { ...z.pos }, radius: z.radius, warn: false });
   if (z.kind === "slam") w.events.push({ type: "explosion", pos: { ...z.pos }, radius: z.radius });
+  if (z.kind === "fire" || z.kind === "holyfire") {
+    const l = w.lights.find((x) => x.id === z.light);
+    if (l) l.on = true;
+    w.events.push({ type: "fire", pos: { ...z.pos }, radius: z.radius });
+  }
   for (const u of w.units) {
     if (!u.alive || !zoneHurts(z, u.team, u.def.faction === "undead" || u.team === "minion")) continue;
     if (dist(u.pos, z.pos) > z.radius + u.radius * 0.5) continue;
@@ -339,6 +351,16 @@ function landLob(w: World, b: Bullet): void {
       break;
     case "plague":
       addZone(w, { kind: "plague", pos: { ...at }, radius: l.radius, life: 5, warn: 0, side: b.side, dps: 6, burst: 0, halves: 0, fromPlayer: b.fromPlayer });
+      break;
+    case "keg":
+      // a rolled powder keg: a blast and a ring of burning splinters
+      explode(w, at, l.radius, b.damage, b.side, b.fromPlayer);
+      ring(w, at, 12, 210, w.rng() * Math.PI, { side: b.side, radius: 9, look: "ember", life: 3.5, damage: 3, halves: 1 });
+      break;
+    case "oil":
+      // burning oil: a fire that never goes out and lights the floor for good
+      w.events.push({ type: "fire", pos: { ...at }, radius: l.radius });
+      addZone(w, { kind: "fire", pos: { ...at }, radius: l.radius, life: 9999, warn: 0, side: "none", dps: 4, burst: 0, halves: 1, permanent: true });
       break;
   }
 }
@@ -486,7 +508,11 @@ export function updateBullets(w: World, dt: number): void {
       break;
     }
     if (b.life > 0 && b.side !== "minion" && w.player.alive && dist(w.player.pos, to) < CONFIG.player.radius + b.radius) {
-      if (hurtPlayer(w, b.halves, dir, b.holy)) b.life = 0;
+      if (hurtPlayer(w, b.halves, dir, b.holy)) {
+        b.life = 0;
+        // a chain hook drags the necromancer in
+        if (b.pullTo) w.player.push = add(w.player.push, scale(norm(sub(b.pullTo, w.player.pos)), 1500));
+      }
     }
   }
   w.bullets = w.bullets.filter((b) => b.life > 0);

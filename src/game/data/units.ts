@@ -212,11 +212,11 @@ export const UNITS: Record<UnitKind, UnitDef> = {
   }),
   // ---------------------------------------------------------------- bosses (scripts in bosses.ts)
   executioner: D({ kind: "executioner", faction: "boss", ai: "boss", hp: 260, radius: 40, speed: 125, melee: 6, gold: [20, 30], raisable: false, size: 1.7, boss: true }),
-  captain: D({ kind: "captain", faction: "boss", ai: "boss", hp: 300, radius: 32, speed: 150, melee: 5, gold: [25, 35], raisable: false, size: 1.35, boss: true }),
-  powdermaster: D({ kind: "powdermaster", faction: "boss", ai: "boss", hp: 320, radius: 34, speed: 115, melee: 5, gold: [30, 40], raisable: false, size: 1.4, boss: true }),
+  captain: D({ kind: "captain", faction: "boss", ai: "boss", hp: 300, radius: 32, speed: 150, melee: 5, gold: [25, 35], raisable: false, size: 1.5, boss: true }),
+  powdermaster: D({ kind: "powdermaster", faction: "boss", ai: "boss", hp: 320, radius: 34, speed: 115, melee: 5, gold: [30, 40], raisable: false, size: 1.65, boss: true }),
   bishop: D({ kind: "bishop", faction: "boss", ai: "boss", hp: 360, radius: 54, speed: 70, melee: 6, gold: [30, 40], raisable: false, size: 1.6, boss: true }),
-  grandinquisitor: D({ kind: "grandinquisitor", faction: "boss", ai: "boss", hp: 420, radius: 36, speed: 140, melee: 6, gold: [35, 45], raisable: false, size: 1.45, boss: true }),
-  holyflame: D({ kind: "holyflame", faction: "boss", ai: "boss", hp: 680, radius: 70, speed: 70, melee: 8, gold: [0, 0], raisable: false, size: 2.4, boss: true }),
+  grandinquisitor: D({ kind: "grandinquisitor", faction: "boss", ai: "boss", hp: 380, radius: 36, speed: 140, melee: 6, gold: [35, 45], raisable: false, size: 1.6, boss: true }),
+  holyflame: D({ kind: "holyflame", faction: "boss", ai: "boss", hp: 560, radius: 70, speed: 70, melee: 8, gold: [0, 0], raisable: false, size: 2.4, boss: true }),
 };
 
 /** The occult rivals belong to nobody: they attack the city, the Church and the necromancer alike. */

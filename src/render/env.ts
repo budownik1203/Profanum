@@ -647,14 +647,28 @@ export function drawZone(g: Graphics, glow: Graphics, z: Zone, t: number): void 
     case "holyfire": {
       const hot = z.kind === "holyfire" ? 0xfff0c0 : PAL.emberHot;
       const mid = z.kind === "holyfire" ? 0xf4c860 : PAL.ember;
-      g.ellipse(x, y, z.radius, z.radius * 0.6).fill({ color: 0x1a0c06, alpha: 0.5 * fade });
-      glow.ellipse(x, y, z.radius, z.radius * 0.6).fill({ color: mid, alpha: 0.16 * fade });
-      const n = Math.max(4, Math.round(z.radius / 12));
+      if (z.warn > 0) {
+        // not burning yet: a ring that fills up until it ignites
+        const k = 1 - z.warn / Math.max(0.01, z.warnMax ?? 1);
+        const pulse = 0.5 + 0.5 * Math.sin(t * 16);
+        const ring = z.kind === "holyfire" ? PAL.holy : PAL.telegraph;
+        glow.circle(x, y, z.radius).stroke({ width: 3 + 2 * pulse, color: ring, alpha: 0.45 + 0.35 * k });
+        glow.circle(x, y, z.radius * k).fill({ color: ring, alpha: 0.12 + 0.14 * k });
+        if (z.kind === "holyfire") {
+          // a pillar of light gathers above the spot
+          glow.rect(x - z.radius * 0.25 * k, y - 260, z.radius * 0.5 * k, 260).fill({ color: PAL.holy, alpha: 0.08 + 0.12 * k });
+        }
+        break;
+      }
+      // the burning area is a true circle: exactly where it hurts
+      g.circle(x, y, z.radius).fill({ color: 0x1a0c06, alpha: 0.5 * fade });
+      glow.circle(x, y, z.radius).fill({ color: mid, alpha: 0.16 * fade });
+      const n = Math.max(5, Math.round(z.radius / 10));
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + z.id;
-        const r = z.radius * (0.25 + 0.6 * hash(i, z.id));
+        const r = z.radius * (0.2 + 0.7 * hash(i, z.id));
         const fx = x + Math.cos(a) * r;
-        const fy = y + Math.sin(a) * r * 0.6;
+        const fy = y + Math.sin(a) * r;
         const h = (14 + 10 * Math.sin(t * 9 + i * 1.7)) * fade;
         glow.poly([fx - 6, fy, fx, fy - h, fx + 6, fy]).fill({ color: i % 2 ? hot : mid, alpha: 0.85 * fade });
       }

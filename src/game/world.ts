@@ -190,11 +190,13 @@ export class World {
   }
 
   addZone(z: Omit<Zone, "id" | "maxLife">): Zone {
-    const zone: Zone = { ...z, id: nextId(), maxLife: z.life };
+    const zone: Zone = { ...z, id: nextId(), maxLife: z.life, warnMax: z.warn };
     this.zones.push(zone);
     if (z.kind === "fire" || z.kind === "holyfire") {
       const l = this.addLight("fire", z.pos, { radius: z.radius * 1.9, ownerZone: zone.id });
       if (z.kind === "holyfire") l.holy = true;
+      // a warned fire only lights up when it ignites
+      if (z.warn > 0) l.on = false;
       zone.light = l.id;
     }
     return zone;

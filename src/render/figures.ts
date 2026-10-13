@@ -12,6 +12,7 @@ import type { World } from "../game/world.js";
 import { PAL } from "../palette.js";
 import { OUT } from "./env.js";
 import { drawWeaponShape } from "./weapons.js";
+import { drawBoss } from "./bosses.js";
 
 type Head = "morion" | "plumed" | "widebrim" | "capotain" | "straw" | "bare" | "hood" | "skull" | "cowl" | "mask" | "tonsure" | "inqhat" | "greathelm" | "executioner" | "mitre";
 type Gear = "halberd" | "arquebus" | "pistols" | "pitchfork" | "torch" | "crossbow" | "shovel" | "claws" | "orb" | "flask" | "censer" | "whip" | "sword" | "handbell" | "candle" | "axe" | "bombs" | "crozier" | "none";
@@ -49,12 +50,6 @@ const LOOKS: Partial<Record<UnitKind, Look>> = {
   knight: { coat: 0xd8d0c0, coatMid: 0x8a8070, skin: 0x8a6e58, head: "greathelm", gear: "sword", shield: true, trim: 0xb8321e, bulk: 1.15 },
   bellringer: { coat: 0x4a3a30, coatMid: 0x2c221c, skin: 0x8a6e58, head: "hood", gear: "handbell", hunch: 0.35 },
   acolyte: { coat: 0xb8ac98, coatMid: 0x7a6e5e, skin: 0x8a6e58, head: "tonsure", gear: "candle", robe: true },
-  // bosses (their full portraits come with the boss fights)
-  executioner: { coat: 0x7a5a48, coatMid: 0x4a2a20, skin: 0x8a6a58, head: "executioner", gear: "axe", bulk: 1.25, trim: 0x2a2020 },
-  captain: { coat: 0x8a2a1e, coatMid: 0x4a1610, skin: 0x8a6e58, head: "plumed", gear: "halberd", trim: 0xd8b04a, bulk: 1.1 },
-  powdermaster: { coat: 0x5a4028, coatMid: 0x342414, skin: 0x8a6e58, head: "mask", gear: "bombs", trim: 0xa8823e, bulk: 1.2 },
-  bishop: { coat: 0xe8e0d0, coatMid: 0xa8a090, skin: 0x8a6e58, head: "mitre", gear: "crozier", robe: true, trim: 0xd8b04a, bulk: 1.2 },
-  grandinquisitor: { coat: 0x7a1010, coatMid: 0x400808, skin: 0x8a6e58, head: "inqhat", gear: "crossbow", robe: true, trim: 0xd8b04a, bulk: 1.1 },
 };
 
 const MINION = { coat: PAL.minion, coatMid: PAL.minionMid, skin: 0x7a766e };
@@ -64,7 +59,7 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   if (e.kind === "dog") return drawDog(g, glow, e, w, warn);
   if (e.kind === "mimic") return drawMimic(g, glow, e, w);
   if (e.kind === "abomination") return drawAbomination(g, glow, e, w);
-  if (e.kind === "holyflame") return drawFlame(g, glow, e, w);
+  if (e.def.boss) return drawBoss(g, glow, e, w);
   const look = LOOKS[e.kind] ?? LOOKS.halberdier!;
   const minion = e.team === "minion";
   const { x, y } = e.pos;
@@ -444,22 +439,6 @@ function drawAbomination(g: Graphics, glow: Graphics, e: Unit, w: World): void {
   glow.circle(x - 6, y - r * 1.45, 3).fill(PAL.ember);
   glow.circle(x + 6, y - r * 1.45, 3).fill(PAL.ember);
   if (e.state === "windup") glow.circle(x + e.dir.x * 40, y + e.dir.y * 40, e.def.area ?? 100).stroke({ width: 3, color: PAL.ember, alpha: 0.4 });
-}
-
-/** The Holy Flame: a pillar of fire with eyes (its full fight comes with the boss scripts). */
-function drawFlame(g: Graphics, glow: Graphics, e: Unit, w: World): void {
-  const { x, y } = e.pos;
-  const r = e.radius;
-  g.ellipse(x, y + 20, r * 1.3, r * 0.4).fill({ color: 0x1a0c06, alpha: 0.7 });
-  for (let i = 0; i < 9; i++) {
-    const a = i / 9;
-    const h = r * (2.2 + 0.4 * Math.sin(w.time * 5 + i * 1.3));
-    const fx = x + (a - 0.5) * r * 1.6;
-    glow.poly([fx - r * 0.25, y, fx, y - h, fx + r * 0.25, y]).fill({ color: i % 2 ? 0xffd090 : PAL.ember, alpha: 0.85 });
-  }
-  glow.ellipse(x, y - r * 1.1, r * 0.55, r * 0.9).fill({ color: e.flash > 0 ? 0xffffff : 0xfff4d8, alpha: 0.9 });
-  glow.circle(x - r * 0.2, y - r * 1.3, r * 0.08).fill(PAL.ink);
-  glow.circle(x + r * 0.2, y - r * 1.3, r * 0.08).fill(PAL.ink);
 }
 
 // ------------------------------------------------------------------ the necromancer

@@ -72,6 +72,8 @@ async function boot(): Promise<void> {
   let endTimer = 0;
   let acc = 0;
   let hitstop = 0;
+  /** Debug only (screenshots): the simulation stands still while everything is still drawn. */
+  let frozen = false;
   let lastFloor: Floor | null = null;
   let time = 0;
 
@@ -444,6 +446,31 @@ async function boot(): Promise<void> {
       overlay = "pause";
       sel = 0;
     },
+    /** Start a boss attack right now (and optionally set its health share). */
+    boss(step?: string, hpShare?: number) {
+      const u = world()?.units.find((x) => x.def.boss && x.alive);
+      if (!u?.boss) return false;
+      u.boss.intro = 0;
+      if (hpShare !== undefined) u.hp = u.maxHp * hpShare;
+      if (step) {
+        u.boss.step = step;
+        u.boss.t = 0;
+        u.boss.n = 0;
+      }
+      return true;
+    },
+    freeze(on = true) {
+      frozen = on;
+    },
+    /** Run the simulation for a while with the necromancer standing still. */
+    advance(seconds: number) {
+      if (!run) return;
+      for (let i = 0; i < Math.round(seconds / STEP); i++) react(run.update(STEP, idleInput(run.world.player.pos)), run.world);
+    },
+    place(x: number, y: number) {
+      const w = world();
+      if (w) w.player.pos = { x, y };
+    },
     get overlay() {
       return overlay;
     },
@@ -506,7 +533,7 @@ async function boot(): Promise<void> {
     }
 
     // ---- simulation (only when nothing is open)
-    if (overlay === null && mode !== "summary") {
+    if (overlay === null && mode !== "summary" && !frozen) {
       if (esc) {
         overlay = "pause";
         sel = 0;

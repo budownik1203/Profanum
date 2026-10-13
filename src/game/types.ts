@@ -217,6 +217,8 @@ export interface BossState {
   next: number;
   angle: number;
   intro: number;
+  /** The last attack, so the rotation does not repeat itself. */
+  prev?: string;
   /** Anything else a script needs. */
   mem: Record<string, number>;
 }
@@ -289,7 +291,7 @@ export interface Lob {
   t: number;
   dur: number;
   /** What happens on landing. */
-  land: "explode" | "fire" | "fireRing" | "holyRing" | "plague";
+  land: "explode" | "fire" | "fireRing" | "holyRing" | "plague" | "keg" | "oil";
   radius: number;
   height: number;
 }
@@ -335,6 +337,8 @@ export interface Bullet {
   blast?: number;
   /** Weapon that fired it (for effects and sounds). */
   weapon?: WeaponId;
+  /** A chain hook: hitting the necromancer drags him towards this point. */
+  pullTo?: Vec;
   /** Colour hint for the renderer. */
   tint?: number;
 }
@@ -352,6 +356,8 @@ export interface Zone {
   maxLife: number;
   /** Seconds of warning before it hurts (the red ring you have to leave). */
   warn: number;
+  /** The warning it started with (for drawing how close it is). */
+  warnMax?: number;
   /** Who it spares: its own side. "none" hurts everyone. */
   side: Team | "none";
   /** Damage per second to units inside. */
