@@ -535,7 +535,7 @@ export interface Door {
 
 // ------------------------------------------------------------------ events
 export type GameEvent =
-  | { type: "shot"; pos: Vec; dir: Vec; side: Team; weapon?: WeaponId; fromPlayer: boolean; silent?: boolean }
+  | { type: "shot"; pos: Vec; dir: Vec; side: Team; weapon?: WeaponId; fromPlayer: boolean; silent?: boolean; unit?: number }
   | { type: "enemyHit"; pos: Vec; dir: Vec; enemy: number; ambush: boolean; amount: number; crit: boolean }
   | { type: "enemyDeath"; pos: Vec; dir: Vec; kind: UnitKind; ambush: boolean; team: Team; elite: boolean; boss: boolean }
   | { type: "minionHit"; pos: Vec; dir: Vec; unit: number; amount: number }
@@ -568,7 +568,7 @@ export type GameEvent =
   /** Men walked in through a door (a wave, help from next door, the bell's answer, the hunt). */
   | { type: "reinforcements"; pos: Vec; first: boolean }
   /** An ambusher burst out of hiding. */
-  | { type: "ambushOut"; pos: Vec }
+  | { type: "ambushOut"; pos: Vec; unit?: number }
   /** The last stand began, ran out, or was won. */
   | { type: "hold"; stage: "start" | "over" | "won"; left: number }
   /** The cultists' circle went dark with the last of them. */

@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test \".test-build/tests/*.test.js\"",
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
     "artifact": "node tools/build-artifact.mjs dist/profanum.html",
     "shots": "node tools/shot.mjs dist/profanum.html dist/shots tools/scenarios/tour.mjs"
   },

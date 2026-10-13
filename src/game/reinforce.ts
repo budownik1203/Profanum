@@ -134,7 +134,7 @@ export function updateReinforce(w: World, dt: number): void {
     if (w.alarm || (p.alive && dist(u.pos, p.pos) < c.ambushReveal)) {
       u.hidden = false;
       u.state = "approach";
-      w.events.push({ type: "ambushOut", pos: { ...u.pos } });
+      w.events.push({ type: "ambushOut", pos: { ...u.pos }, unit: u.id });
       if (!w.alarm) w.raiseAlarm(u);
     }
   }

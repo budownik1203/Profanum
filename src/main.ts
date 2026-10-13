@@ -89,6 +89,8 @@ async function boot(): Promise<void> {
   let frozen = false;
   let lastFloor: Floor | null = null;
   let time = 0;
+  /** When the run summary appeared (it ignores input for a moment, so a dying click does not skip it). */
+  let summaryAt = 0;
   /** The Grimoire: the open chapter and entry, and whether its records need saving. */
   let codexTab = 0;
   let codexSel = 0;
@@ -184,6 +186,8 @@ async function boot(): Promise<void> {
       ],
     };
     mode = "summary";
+    summaryAt = time;
+    input.releaseMouse();
     overlay = null;
   };
 
@@ -807,7 +811,7 @@ async function boot(): Promise<void> {
     // ---- overlays
     if (mode === "summary" && summary) {
       screens.summary(summary.victory ? t("sum.victory") : t("sum.death"), summary.lines, summary.victory ? 0xf4e2a8 : PAL.heart, t("sum.continue"));
-      if (accept || clicked) {
+      if ((accept || clicked) && time - summaryAt > 1.0) {
         input.releaseMouse();
         summary = null;
         enterHub();

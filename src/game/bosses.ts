@@ -356,7 +356,7 @@ function captain(c: Ctx): void {
       if (b.n >= 1 && b.n <= shots && b.t >= wind + (b.n - 1) * 0.35) {
         const dir = fromAngle(angleOf(aim(c)) + (b.n % 2 ? 0 : 0.09));
         fan(w, add(u.pos, scale(dir, 30)), dir, 5, 0.8, 290, B(c, { look: "ball", radius: 9 }));
-        w.events.push({ type: "shot", pos: { ...u.pos }, dir, side: u.team, fromPlayer: false });
+        w.events.push({ type: "shot", pos: { ...u.pos }, dir, side: u.team, fromPlayer: false, unit: u.id });
         b.n += 1;
       }
       if (b.t >= wind + shots * 0.35 + 0.3) rest(c, 1.2);
@@ -396,7 +396,7 @@ function captain(c: Ctx): void {
             shot(c, vec(x, 70), vec(0, 1), 240, { look: "ball", radius: 9, life: 9, delay: 0.5 });
           }
         }
-        w.events.push({ type: "shot", pos: { ...u.pos }, dir: vec(1, 0), side: u.team, fromPlayer: false });
+        w.events.push({ type: "shot", pos: { ...u.pos }, dir: vec(1, 0), side: u.team, fromPlayer: false, unit: u.id });
       }
       if (b.t >= 1.6) rest(c, 1.3);
       break;
@@ -676,7 +676,7 @@ function grandinquisitor(c: Ctx): void {
       }
       if ((b.n === 1 && b.t >= wind) || (b.n === 2 && b.t >= wind + 0.5)) {
         fan(w, u.pos, aim(c), 4, 0.6, 400, B(c, { look: "holy", radius: 8 }));
-        w.events.push({ type: "shot", pos: { ...u.pos }, dir: aim(c), side: u.team, fromPlayer: false });
+        w.events.push({ type: "shot", pos: { ...u.pos }, dir: aim(c), side: u.team, fromPlayer: false, unit: u.id });
         b.n += 1;
       }
       if (b.t >= wind + 0.9) rest(c, 1.1);
