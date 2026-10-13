@@ -11,7 +11,7 @@ import { World } from "../game/world.js";
 import { t } from "../i18n.js";
 import { PAL } from "../palette.js";
 import { CANDELABRA_ARMS, CHANDELIER_CANDLES, drawChest, drawCover, drawDoorsState, drawFixture, drawFloor, drawInteractable, drawPickup, drawZone } from "./env.js";
-import { drawPlayer, drawUnit, type Motion } from "./figures.js";
+import { CHAMPION_COLOR, drawPlayer, drawUnit, type Motion } from "./figures.js";
 import { VIEW_H, VIEW_W } from "./hud.js";
 import { TextPool } from "./text.js";
 
@@ -300,6 +300,25 @@ export class GameRenderer {
           break;
         case "command":
           for (let i = 0; i < 12; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-120, 120), rnd(0.3, 0.6), rnd(1.5, 3), PAL.ember, "spark");
+          break;
+        case "hook": {
+          // the chain: a line of iron links from the butcher to where the hook stopped
+          const dx = e.to.x - e.from.x;
+          const dy = e.to.y - e.from.y;
+          const n = Math.max(4, Math.round(Math.hypot(dx, dy) / 26));
+          for (let i = 0; i <= n; i++) this.spawn({ x: e.from.x + (dx * i) / n, y: e.from.y - 30 + (dy * i) / n }, 0, 0, 0.35, 3.5, PAL.iron, "chunk");
+          if (e.hit) {
+            this.addShake(6);
+            this.floatText(e.to, t("float.hooked"), PAL.telegraph, 26, 0.9);
+          }
+          break;
+        }
+        case "summon":
+          for (let i = 0; i < 14; i++) this.spawn(e.pos, rnd(-60, 60), rnd(-120, -20), rnd(0.4, 0.9), rnd(6, 12), 0x1a2a1a, "smoke");
+          for (let i = 0; i < 8; i++) this.spawn(e.pos, rnd(-90, 90), rnd(-140, -30), rnd(0.3, 0.6), rnd(1.5, 3), 0x6ad46a, "spark");
+          break;
+        case "championDeath":
+          for (let i = 0; i < 18; i++) this.spawn(e.pos, rnd(-150, 150), rnd(-170, 40), rnd(0.3, 0.7), rnd(2, 4), CHAMPION_COLOR[e.champion], "spark");
           break;
         case "squadOrder":
           this.floatText(e.pos, t(`float.order.${e.order}`), e.order === "chant" ? PAL.holy : PAL.telegraph, 30, 1.2);

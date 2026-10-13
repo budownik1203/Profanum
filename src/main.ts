@@ -381,6 +381,8 @@ async function boot(): Promise<void> {
             return { text: t("hub.ledger"), pos };
           case "codex":
             return { text: t("hub.codex"), pos };
+          case "trial":
+            return { text: t("prompt.trial"), sub: t("prompt.trialSub"), pos };
           case "sarcophagus":
             return null; // the sarcophagus panel says it all
           default:
@@ -438,6 +440,11 @@ async function boot(): Promise<void> {
           break;
         case "roomCleared":
           showBanner(t("banner.cleared"), undefined, 1.8);
+          break;
+        case "trial":
+          if (e.stage === "start") showBanner(t("banner.trial"), t("banner.trialSub", { n: e.waves }), 2.2);
+          else if (e.stage === "wave") showBanner(t("banner.trialWave", { n: e.wave, m: e.waves }), undefined, 1.4);
+          else showBanner(t("banner.trialDone"), t("banner.trialDoneSub"), 2.4);
           break;
         case "doorsShut":
           if (!banner || banner.time < 1) showBanner(t("banner.doorsShut"), undefined, 1.4);

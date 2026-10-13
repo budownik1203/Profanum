@@ -76,6 +76,7 @@ export function damageUnit(w: World, u: Unit, amount: number, dir: Vec, o: HitOp
   const undead = u.team === "minion" || u.def.faction === "undead";
   if (o.holy && undead) dmg *= 2;
   dmg *= bossTakenMul(w, u);
+  if (u.champion === "armored") dmg *= CONFIG.champions.armoredTaken;
   if (u.boss && u.boss.intro > 0) dmg = 0; // the boss is still making its entrance
   u.hp -= dmg;
   if (!w.alarm && u.team !== "minion") w.raiseAlarm(u);
@@ -152,6 +153,7 @@ export function killUnit(w: World, u: Unit, dir: Vec, o: { crumbled?: boolean; a
       }
     }
     dropLoot(w, u);
+    if (u.champion) championDeath(w, u);
     if (u.def.boss) onBossDeath(w, u);
     if (u.st.infected && u.def.raisable) autoRaise(w, u, false);
     else if (u.st.ashMarked && u.def.raisable) autoRaise(w, u, true);
@@ -162,6 +164,31 @@ export function killUnit(w: World, u: Unit, dir: Vec, o: { crumbled?: boolean; a
       w.corpses.push({ id: nextId(), kind: u.kind, pos: { ...u.pos }, dir, echo: u.raises < n.maxRaises ? n.echo : 0, raises: u.raises, fromMinion: true, big: false });
     }
   }
+}
+
+/** A champion's gift shows itself once more as he dies. */
+function championDeath(w: World, u: Unit): void {
+  const c = u.champion!;
+  const pos = { ...u.pos };
+  switch (c) {
+    case "explosive":
+      // a red circle, then the blast: time enough to step out
+      addZone(w, { kind: "slam", pos, radius: 110, life: 0.95, warn: 0.75, side: u.team, dps: 0, burst: 10, halves: 1 });
+      break;
+    case "splitting":
+      // he falls apart into two smaller copies of himself (they don't split again)
+      for (const side of [-1, 1]) {
+        const k = w.spawn(u.kind, w.collideWorld(add(pos, vec(side * 34, 10)), u.radius * 0.75), u.team, { mini: true });
+        k.hp = k.maxHp = Math.max(2, u.maxHp * 0.4);
+      }
+      break;
+    case "vengeful":
+      ring(w, pos, 12, 230, w.rng() * Math.PI, { side: u.team, radius: 9, look: "holy", holy: true, life: 3, damage: 3, halves: 1 });
+      break;
+    default:
+      break;
+  }
+  w.events.push({ type: "championDeath", pos, champion: c });
 }
 
 // ------------------------------------------------------------------ explosions and areas

@@ -1,6 +1,6 @@
 /**
  * People and creatures: every unit kind as an ink silhouette with its own headgear and weapon,
- * the six playable characters, minions in ash grey with ember eyes, elites with a gold crest.
+ * the six playable characters, minions in ash grey with ember eyes, champions with a coloured aura.
  * Parametric on purpose: one figure builder, many looks (placeholders until the cut-out sprites).
  */
 import type { Graphics } from "pixi.js";
@@ -15,7 +15,7 @@ import { drawWeaponShape } from "./weapons.js";
 import { drawBoss } from "./bosses.js";
 
 type Head = "morion" | "plumed" | "widebrim" | "capotain" | "straw" | "bare" | "hood" | "skull" | "cowl" | "mask" | "tonsure" | "inqhat" | "greathelm" | "executioner" | "mitre";
-type Gear = "halberd" | "arquebus" | "pistols" | "pitchfork" | "torch" | "crossbow" | "shovel" | "claws" | "orb" | "flask" | "censer" | "whip" | "sword" | "handbell" | "candle" | "axe" | "bombs" | "crozier" | "none";
+type Gear = "halberd" | "arquebus" | "pistols" | "pitchfork" | "torch" | "crossbow" | "shovel" | "claws" | "orb" | "flask" | "censer" | "whip" | "sword" | "handbell" | "candle" | "axe" | "bombs" | "crozier" | "grenade" | "cleaver" | "flamer" | "none";
 
 interface Look {
   coat: number;
@@ -36,6 +36,11 @@ interface Look {
 const LOOKS: Partial<Record<UnitKind, Look>> = {
   halberdier: { coat: 0x6a2c1e, coatMid: 0x3e1912, skin: 0x8a6e58, head: "morion", gear: "halberd" },
   paviser: { coat: 0x5c3c26, coatMid: 0x382416, skin: 0x8a6e58, head: "morion", gear: "sword", trim: 0x6a2c1e, bulk: 1.06 },
+  // elites: their own cut and colours, not bigger copies of the ordinary men
+  grenadier: { coat: 0x2e3a52, coatMid: 0x1a2234, skin: 0x8a6e58, head: "mitre", gear: "grenade", trim: 0xb8321e, bulk: 1.08 },
+  butcher: { coat: 0xb8ac98, coatMid: 0x7a3a2c, skin: 0x9a7a62, head: "bare", gear: "cleaver", trim: 0x7a1a12, bulk: 1.22, hunch: 0.12 },
+  confessor: { coat: 0x2a1010, coatMid: 0x140808, skin: 0x8a6e58, head: "cowl", gear: "flamer", robe: true, trim: 0xd8b04a, eyes: 0xffb060 },
+  summoner: { coat: 0x1e2a22, coatMid: 0x0e1610, skin: 0x7a7a6a, head: "cowl", gear: "orb", robe: true, trim: 0x6ad46a, eyes: 0x8aff6a },
   arquebusier: { coat: 0x3a4048, coatMid: 0x22262c, skin: 0x8a6e58, head: "widebrim", gear: "arquebus" },
   sergeant: { coat: 0x7a3022, coatMid: 0x451a12, skin: 0x8a6e58, head: "plumed", gear: "pistols", trim: 0xa8823e, bulk: 1.08 },
   peasant: { coat: 0x5a4a32, coatMid: 0x3a2e1e, skin: 0x8c705a, head: "straw", gear: "pitchfork", hunch: 0.15 },
@@ -74,6 +79,7 @@ function feet(g: Graphics, x: number, y: number, s: number, m: Motion | undefine
 
 // ------------------------------------------------------------------ units
 export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: number, m?: Motion): void {
+  if (e.champion && e.team !== "minion" && (e.kind === "dog" || e.kind === "mimic" || e.kind === "abomination")) drawChampionAura(glow, e, e.pos.x, e.pos.y, e.def.size, w);
   if (e.kind === "dog") return drawDog(g, glow, e, w, warn);
   if (e.kind === "rat") return drawRat(g, glow, e, w, warn);
   if (e.kind === "mimic") return drawMimic(g, glow, e, w);
@@ -82,7 +88,7 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   const look = LOOKS[e.kind] ?? LOOKS.halberdier!;
   const minion = e.team === "minion";
   const { x, y } = e.pos;
-  const size = (e.def.size ?? 1) * (e.mini ? 0.75 : 1) * (e.elite ? 1.15 : 1);
+  const size = (e.def.size ?? 1) * (e.mini ? 0.75 : 1);
   const face = minion ? (e.dir.x >= 0 ? 1 : -1) : w.player.pos.x >= x ? 1 : -1;
   const flash = e.flash > 0;
   const coat = flash ? 0xffffff : minion ? MINION.coat : look.coat;
@@ -97,7 +103,14 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   const hunch = (look.hunch ?? 0) * 20 * s * face + lean;
   const bulk = look.bulk ?? 1;
 
+  // a shadow champion in the dark is only two eyes, until he comes close
+  if (e.champion === "shadow" && !minion && !w.isLit(e.pos, true) && Math.hypot(w.player.pos.x - x, w.player.pos.y - y) > 170) {
+    glow.circle(x + 4 * face * s, top + 11 * s, 2.4 * s).fill(CHAMPION_COLOR.shadow);
+    glow.circle(x + 10 * face * s, top + 11 * s, 2 * s).fill(CHAMPION_COLOR.shadow);
+    return;
+  }
   g.ellipse(x, y + 16 * s, 24 * s * bulk, 8 * s).fill({ color: PAL.ink, alpha: 0.6 });
+  if (e.champion && !minion) drawChampionAura(glow, e, x, y, s, w);
   feet(g, x, y, s, m, flash ? 0xffffff : minion ? MINION.coatMid : 0x1a1412);
   if (minion) {
     // black mist curling at the feet; it thins out as the body nears its end
@@ -154,10 +167,6 @@ export function drawUnit(g: Graphics, glow: Graphics, e: Unit, w: World, warn: n
   } else if (look.eyes) {
     glow.circle(x + 4 * face * s + hunch * 1.2, top + 11 * s, 2.2 * s).fill(look.eyes);
     glow.circle(x + 10 * face * s + hunch * 1.2, top + 11 * s, 1.8 * s).fill(look.eyes);
-  }
-  if (e.elite) {
-    // a gilded crest: the mini-boss
-    g.poly([x - 2, top - 8 * s, x + 6, top - 34 * s, x + 14, top - 30 * s, x + 8, top - 8 * s]).fill(0xd8b04a).stroke({ width: 3, color: PAL.ink });
   }
   drawStatus(g, glow, e, x, top, s, w);
   if (e.lamplighter && !minion) drawTaper(g, glow, e, x, top, s, face, w);
@@ -296,6 +305,56 @@ function drawGear(g: Graphics, glow: Graphics, gear: Gear, e: Unit, x: number, t
       for (const o of [-6, 6]) stick(x + face * 10 * s, top + 44 * s + o, hx + d.x * reach * s, hy + d.y * reach * s + o, 3, minion ? PAL.minion : 0x6a7258);
       break;
     }
+    case "grenade": {
+      // a black iron ball with a lit fuse, ready to throw (raised while he winds up)
+      const up = e.state === "cast" ? -26 : 0;
+      const gx = x + face * 22 * s;
+      const gy = top + 40 * s + up * s;
+      g.circle(gx, gy, 8 * s).fill(0x1a1a1c).stroke({ width: 3, color: PAL.ink });
+      g.moveTo(gx + 3 * s, gy - 7 * s).lineTo(gx + 7 * s, gy - 13 * s).stroke({ width: 2, color: 0x8a6e44 });
+      glow.circle(gx + 7 * s, gy - 14 * s, (2.5 + Math.random() * 1.5) * s).fill(PAL.emberHot);
+      // a bandolier of grenades across the chest
+      for (let i = 0; i < 3; i++) g.circle(x - 10 * s + i * 9 * s, top + 34 * s + i * 5 * s, 4 * s).fill(0x1a1a1c).stroke({ width: 2, color: PAL.ink });
+      break;
+    }
+    case "cleaver": {
+      // a butcher's cleaver; the hook on its chain hangs at his belt until he throws it
+      const raise = e.state === "windup" ? -1.1 : 0;
+      const a = Math.atan2(d.y, d.x) + raise * face;
+      const sx = x + face * 16 * s;
+      const sy = top + 44 * s;
+      const ex = sx + Math.cos(a) * 34 * s;
+      const ey = sy + Math.sin(a) * 34 * s;
+      g.moveTo(sx, sy).lineTo(ex, ey).stroke({ width: 7 * s, color: PAL.ink, cap: "round" });
+      g.moveTo(sx, sy).lineTo(ex, ey).stroke({ width: 3.5 * s, color: PAL.wood, cap: "round" });
+      const px = -Math.sin(a);
+      const py = Math.cos(a);
+      g.poly([ex - px * 4 * s, ey - py * 4 * s, ex + Math.cos(a) * 22 * s - px * 4 * s, ey + Math.sin(a) * 22 * s - py * 4 * s, ex + Math.cos(a) * 22 * s + px * 18 * s, ey + Math.sin(a) * 22 * s + py * 18 * s, ex + px * 18 * s, ey + py * 18 * s])
+        .fill(minion ? PAL.minion : 0xb0aca4)
+        .stroke({ width: 3, color: PAL.ink });
+      if (e.state !== "aim") {
+        g.moveTo(x - face * 14 * s, top + 52 * s).quadraticCurveTo(x - face * 20 * s, top + 66 * s, x - face * 12 * s, top + 72 * s).stroke({ width: 3, color: PAL.iron });
+      } else {
+        // the hook whirling over his head
+        const ang = w.time * 18;
+        const hx2 = x + Math.cos(ang) * 30 * s;
+        const hy2 = top - 6 * s + Math.sin(ang) * 10 * s;
+        g.moveTo(x + face * 8 * s, top + 30 * s).lineTo(hx2, hy2).stroke({ width: 2, color: PAL.iron });
+        g.circle(hx2, hy2, 5 * s).stroke({ width: 3, color: PAL.iron });
+      }
+      break;
+    }
+    case "flamer": {
+      // a brass nozzle on a pole, fed from a censer on his back; it roars while he sprays
+      const nx = x + d.x * 40 * s;
+      const ny = top + 44 * s + d.y * 30 * s;
+      g.moveTo(x + face * 6 * s, top + 46 * s).lineTo(nx, ny).stroke({ width: 8 * s, color: PAL.ink, cap: "round" });
+      g.moveTo(x + face * 6 * s, top + 46 * s).lineTo(nx, ny).stroke({ width: 4 * s, color: 0xa8823e, cap: "round" });
+      g.circle(x - face * 14 * s, top + 34 * s, 8 * s).fill(0xa8823e).stroke({ width: 3, color: PAL.ink });
+      const spray = e.state === "channel";
+      glow.circle(nx, ny, (spray ? 14 : 5 + Math.random() * 2) * s).fill({ color: spray ? PAL.holy : PAL.ember, alpha: spray ? 0.6 : 0.8 });
+      break;
+    }
     case "orb": {
       const ox = x + face * 20 * s;
       const oy = top + 40 * s;
@@ -369,6 +428,28 @@ function drawShield(g: Graphics, e: Unit, x: number, top: number, s: number, min
     .fill(minion ? PAL.minionMid : 0xd8d0c0)
     .stroke({ width: 4, color: PAL.ink, join: "round" });
   if (!minion) g.circle(cx, cy, 5 * s).fill(0xb8321e);
+}
+
+/** The champions' colours (design: Elity). */
+export const CHAMPION_COLOR: Record<NonNullable<Unit["champion"]>, number> = {
+  swift: 0xf4d03f,
+  armored: 0xa8b4c4,
+  explosive: 0xff7a1c,
+  splitting: 0xc0182a,
+  healer: 0x6ad46a,
+  shadow: 0x9a6ae0,
+  vengeful: 0xf4f0e0,
+};
+
+/** A champion's aura: a pulsing ring of his colour round the feet and a faint glow over him. */
+function drawChampionAura(glow: Graphics, e: Unit, x: number, y: number, s: number, w: World): void {
+  const c = CHAMPION_COLOR[e.champion!];
+  const pulse = 0.5 + 0.5 * Math.sin(w.time * 4 + e.id);
+  glow.ellipse(x, y + 14 * s, (30 + pulse * 6) * s, (10 + pulse * 2) * s).stroke({ width: 4, color: c, alpha: 0.6 + 0.3 * pulse });
+  glow.ellipse(x, y + 14 * s, (22 + pulse * 4) * s, (7 + pulse * 1.5) * s).fill({ color: c, alpha: 0.18 });
+  glow.ellipse(x, y - 24 * s, 30 * s, 50 * s).fill({ color: c, alpha: 0.08 + 0.05 * pulse });
+  // a mote of his colour drifting over his head
+  glow.circle(x + Math.sin(w.time * 2 + e.id) * 6 * s, y - 96 * s, (3 + pulse) * s).fill({ color: c, alpha: 0.9 });
 }
 
 /** The great shield carried before him, painted with the city's arms. */

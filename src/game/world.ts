@@ -13,7 +13,7 @@ import { type Rect, type Vec, add, angleOf, circleHitsRect, clamp, dist, fromAng
 import { UNITS, teamOf, type UnitKind } from "./data/units.js";
 import type {
   Bullet, Chest, Corpse, Cover, CoverKind, Door, GameEvent, InputState, Interactable, Light, LightKind, Pickup,
-  Player, Side, Soul, Squad, Team, Unit, Zone,
+  Player, Side, Soul, Squad, Team, Trial, Unit, Zone,
 } from "./types.js";
 import { makePlayer } from "./stats.js";
 import { BARRELS, FLIPPABLE, blocksBullets, nextId } from "./shared.js";
@@ -21,7 +21,7 @@ import { updateUnit } from "./ai.js";
 import { hurtPlayer, updateBullets, updateZones } from "./combat.js";
 import { updateShooting } from "./shooting.js";
 import { updateLights } from "./lighting.js";
-import { interact, raisableCorpse as findRaisable, updatePickups, onRoomCleared } from "./loot.js";
+import { interact, raisableCorpse as findRaisable, updatePickups, onRoomCleared, updateTrial } from "./loot.js";
 import { useRelic, useSpecial } from "./relics.js";
 import { updateSquads } from "./tactics.js";
 
@@ -74,6 +74,8 @@ export class World {
   zones: Zone[] = [];
   /** Formations of the guards in this room (tactics.ts). */
   squads: Squad[] = [];
+  /** A trial room's waves (rooms.ts / trial in loot.ts). */
+  trial: Trial | null = null;
   pickups: Pickup[] = [];
   chests: Chest[] = [];
   interactables: Interactable[] = [];
@@ -253,10 +255,11 @@ export class World {
     opts: { state?: "idle" | "patrol"; route?: Vec[]; lantern?: boolean; lamplighter?: boolean; elite?: boolean; mini?: boolean } = {},
   ): Unit {
     const def = UNITS[kind];
-    const elite = opts.elite ?? false;
+    // an elite is its own kind of fighter now (design: Elity), not a bigger copy of an ordinary one
+    const elite = def.elite ?? opts.elite ?? false;
     const minion = team === "minion";
     const stats = this.player.stats;
-    let hp = def.hp * (elite ? CONFIG.elite.hpMul : 1);
+    let hp = def.hp;
     if (minion) hp *= stats.minionHpMul * (opts.mini ? 0.5 : 1);
     const u: Unit = {
       id: nextId(),
@@ -265,7 +268,7 @@ export class World {
       team,
       pos: { ...pos },
       push: vec(),
-      radius: def.radius * (elite ? CONFIG.elite.sizeMul : 1) * (opts.mini ? 0.75 : 1),
+      radius: def.radius * (opts.mini ? 0.75 : 1),
       hp,
       maxHp: hp,
       state: "approach",
@@ -365,6 +368,7 @@ export class World {
     }
     if (this.player.alive) this.updatePlayer(dt, input);
     if (this.squads.length) updateSquads(this, dt);
+    if (this.trial?.active) updateTrial(this, dt);
     for (const u of this.units) if (u.alive) updateUnit(this, u, dt);
     updateBullets(this, dt);
     updateZones(this, dt);
@@ -397,6 +401,8 @@ export class World {
   // ---------------------------------------------------------------- doors
   /** Doors slam shut when the alarm sounds and open again once the room is cleared. */
   get doorsOpen(): boolean {
+    // a trial keeps the doors shut between its waves too
+    if (this.trial?.active) return false;
     return !(this.alarm && this.enemies.length > 0);
   }
 
@@ -654,7 +660,7 @@ export class World {
   // ---------------------------------------------------------------- movement
   moveUnit(u: Unit, vel: Vec, dt: number): void {
     u.push = scale(u.push, Math.max(0, 1 - dt * 8));
-    const slow = u.st.slow > 0 || u.st.weep > 0 ? 0.5 : 1;
+    const slow = (u.st.slow > 0 || u.st.weep > 0 ? 0.5 : 1) * (u.champion === "swift" ? CONFIG.champions.swift : 1);
     u.pos = add(u.pos, scale(add(scale(vel, slow), u.push), dt));
     // keep units from stacking on each other
     for (const o of this.units) {

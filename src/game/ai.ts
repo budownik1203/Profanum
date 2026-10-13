@@ -8,6 +8,7 @@ import type { ShotDef } from "./data/units.js";
 import type { Unit } from "./types.js";
 import type { World } from "./world.js";
 import { addZone, damageUnit, fan, hurtPlayer, killUnit, lob, ring, spawnBullet } from "./combat.js";
+import { blocksBullets } from "./shared.js";
 import { tendLights } from "./lighting.js";
 import { updateBoss } from "./bosses.js";
 import { chargeDir, flankMove, holdFormation, squadOf, tendPyre } from "./tactics.js";
@@ -19,7 +20,8 @@ type Behaviour = (w: World, u: Unit, t: Target, dt: number) => Vec;
 
 export function updateUnit(w: World, u: Unit, dt: number): void {
   u.flash = Math.max(0, u.flash - dt);
-  u.timer -= dt;
+  // a swift champion winds up and recovers faster too
+  u.timer -= dt * (u.champion === "swift" ? 1.3 : 1);
   u.cooldown -= dt;
   u.cooldown2 -= dt;
   tickStatus(w, u, dt);
@@ -61,6 +63,21 @@ export function updateUnit(w: World, u: Unit, dt: number): void {
       if (u.state === "windup" || u.state === "strike") u.state = "approach";
       flee(w, u, dt);
       return;
+    }
+  }
+  // a healer champion prays over his fellows now and then
+  if (u.champion === "healer" && u.team !== "minion" && w.alarm) {
+    u.champT = (u.champT ?? 1) - dt;
+    if (u.champT <= 0) {
+      const c = CONFIG.champions;
+      u.champT = c.healEvery;
+      let any = false;
+      for (const o of w.units) {
+        if (!o.alive || o.team !== u.team || o.def.boss || dist(o.pos, u.pos) > c.healRange || o.hp >= o.maxHp) continue;
+        o.hp = Math.min(o.maxHp, o.hp + c.heal);
+        any = true;
+      }
+      if (any) w.events.push({ type: "heal", pos: { ...u.pos } });
     }
   }
   // churchmen and torchbearers burn the bodies the necromancer could raise
@@ -724,7 +741,250 @@ const paviser: Behaviour = (w, u, t, dt) => {
   return rusher(w, u, t, dt);
 };
 
+// ------------------------------------------------------------------ elites
+/** The grenadier: three grenades lobbed round the target, the musket butt for whoever gets close. */
+const grenadier: Behaviour = (w, u, t, dt) => {
+  const d = u.def;
+  const dd = dist(u.pos, t.pos);
+  if (u.state === "cast") {
+    if (u.timer <= 0) {
+      const dir = norm(sub(t.pos, u.pos));
+      const across = vec(-dir.y, dir.x);
+      const lead = t.player ? scale(w.player.vel, 0.35) : vec();
+      const offsets = [vec(0, 0), scale(across, 110), scale(across, -110)];
+      offsets.forEach((o, i) => {
+        const to = add(add(t.pos, lead), add(o, scale(dir, (w.rng() - 0.5) * 60)));
+        lob(w, add(u.pos, vec(0, -34)), to, { side: u.team, damage: u.team === "minion" ? 8 * minionMul(w, u) : 6, halves: 1, look: "bomb", radius: 10 }, "explode", d.area ?? 85, 1.0 + i * 0.15, 170);
+      });
+      u.state = "reposition";
+      u.timer = d.reposition ? w.range(d.reposition) : 1.2;
+      u.cooldown = d.special ?? 3.4;
+    }
+    return vec();
+  }
+  if (dd < 140 && u.state !== "reposition") return rusher(w, u, t, dt);
+  if (dd < 140) {
+    u.state = "approach";
+    return rusher(w, u, t, dt);
+  }
+  if (u.cooldown <= 0 && dd < (d.range ?? 400) + 220) {
+    u.state = "cast";
+    u.timer = 0.6;
+    u.dir = norm(sub(t.pos, u.pos));
+    telegraph(w, u);
+    return vec();
+  }
+  return keepRange(w, u, t, dt);
+};
+
+/** The butcher: a meat hook on a chain drags his victim in, then two blows of the cleaver. */
+const butcher: Behaviour = (w, u, t) => {
+  const d = u.def;
+  const toT = sub(t.pos, u.pos);
+  const dd = len(toT);
+  const dirT = norm(toT);
+  switch (u.state) {
+    case "aim":
+      // the hook is swung, then thrown along a locked line
+      if (u.timer > 0.2) u.dir = dirT;
+      if (u.timer <= 0) {
+        throwHook(w, u);
+        u.state = "recover";
+        u.timer = 0.45;
+      }
+      return vec();
+    case "windup":
+      u.dir = dirT;
+      if (u.timer <= 0) {
+        hitArea(w, u, u.pos, (d.reach ?? 92) + 18, d.melee ?? 6, u.dir, 1.1);
+        u.burst -= 1;
+        if (u.burst > 0) {
+          u.timer = 0.3;
+          telegraph(w, u);
+        } else {
+          u.state = "recover";
+          u.timer = d.recover ?? 0.9;
+        }
+      }
+      return scale(u.dir, 70);
+    case "recover":
+      if (u.timer <= 0) u.state = "approach";
+      return vec();
+    default:
+      u.state = "approach";
+      u.dir = dirT;
+      if (dd < (d.reach ?? 92)) {
+        u.state = "windup";
+        u.timer = d.windup ?? 0.45;
+        u.burst = 2;
+        telegraph(w, u);
+        return vec();
+      }
+      if (u.cooldown <= 0 && dd > 200 && dd < 470) {
+        u.state = "aim";
+        u.timer = 0.75;
+        u.cooldown = d.special ?? 5;
+        telegraph(w, u);
+        return vec();
+      }
+      return scale(dirT, d.speed);
+  }
+};
+
+/** The hook flies straight; the first body on its line (or a wall) stops it. A body is dragged in. */
+function throwHook(w: World, u: Unit): void {
+  const reach = 480;
+  const dir = u.dir;
+  let best: { d: number; pull: () => void } | null = null;
+  const consider = (pos: Vec, r: number, pull: () => void) => {
+    const rel = sub(pos, u.pos);
+    const along = rel.x * dir.x + rel.y * dir.y;
+    const off = Math.abs(rel.x * dir.y - rel.y * dir.x);
+    if (along > 0 && along < reach && off < r + 14 && (!best || along < best.d)) best = { d: along, pull };
+  };
+  if (u.team !== "minion" && w.player.alive && w.player.dodgeLeft <= 0) {
+    consider(w.player.pos, CONFIG.player.radius, () => {
+      const p = w.player;
+      const gap = Math.max(0, dist(p.pos, u.pos) - (u.radius + CONFIG.player.radius + 40));
+      p.push = scale(norm(sub(u.pos, p.pos)), gap * 10);
+      hurtPlayer(w, 1, dir);
+    });
+  }
+  for (const o of w.units) {
+    if (!o.alive || o.team === u.team || o.def.boss) continue;
+    consider(o.pos, o.radius, () => {
+      const gap = Math.max(0, dist(o.pos, u.pos) - (u.radius + o.radius + 30));
+      o.push = scale(norm(sub(u.pos, o.pos)), gap * 8);
+      o.st.stun = Math.max(o.st.stun, 0.6);
+      damageUnit(w, o, 3, dir, { side: u.team, knock: 0 });
+    });
+  }
+  // a cover in the way catches the hook
+  const hit = best as { d: number; pull: () => void } | null;
+  let end = add(u.pos, scale(dir, hit ? hit.d : reach));
+  let blocked = false;
+  for (const c of w.covers) {
+    if (!blocksBullets(c)) continue;
+    for (let k = 0; k <= 12; k++) {
+      const p = add(u.pos, scale(dir, ((hit ? hit.d : reach) * k) / 12));
+      if (p.x > c.x && p.x < c.x + c.w && p.y > c.y && p.y < c.y + c.h) {
+        if (dist(p, u.pos) < dist(end, u.pos)) {
+          end = p;
+          blocked = true;
+        }
+        break;
+      }
+    }
+  }
+  if (hit && !blocked) hit.pull();
+  w.events.push({ type: "hook", from: { ...u.pos }, to: end, hit: !!hit && !blocked });
+}
+
+/** The confessor of the Holy Flame: walks in close and sprays holy fire in a sweeping cone. */
+const flamer: Behaviour = (w, u, t, dt) => {
+  const d = u.def;
+  const toT = sub(t.pos, u.pos);
+  const dd = len(toT);
+  const dirT = norm(toT);
+  switch (u.state) {
+    case "channel": {
+      // the nozzle follows the target, but slowly: step aside and it misses
+      const cur = angleOf(u.dir);
+      const turn = Math.max(-1.5 * dt, Math.min(1.5 * dt, angleDiff(angleOf(dirT), cur)));
+      u.dir = fromAngle(cur + turn);
+      u.cooldown2 -= dt;
+      if (u.cooldown2 <= 0) {
+        u.cooldown2 = 0.055;
+        const a = angleOf(u.dir) + (w.rng() - 0.5) * 0.36;
+        spawnBullet(w, { side: u.team, pos: add(u.pos, scale(u.dir, u.radius + 18)), vel: fromAngle(a, 360 + w.rng() * 80), radius: 10, look: "ember", damage: u.team === "minion" ? 2 * minionMul(w, u) : CONFIG.hitOnMinion, halves: 1, holy: u.team !== "minion", life: 0.75 });
+      }
+      u.burst -= 1;
+      if (u.burst <= 0) {
+        u.burst = 24;
+        addZone(w, { kind: "holyfire", pos: add(u.pos, scale(u.dir, 150)), radius: 46, life: 2.5, warn: 0, side: u.team, dps: 3, burst: 0, halves: 1 });
+      }
+      if (u.timer <= 0) {
+        u.state = "recover";
+        u.timer = 1.1;
+      }
+      return scale(u.dir, 25);
+    }
+    case "windup":
+      u.dir = dirT;
+      if (u.timer <= 0) {
+        u.state = "channel";
+        u.timer = 1.5;
+        u.burst = 12;
+      }
+      return vec();
+    case "recover":
+      if (u.timer <= 0) u.state = "approach";
+      return vec();
+    default:
+      u.state = "approach";
+      u.dir = dirT;
+      if (dd < (d.range ?? 230) + 40 && u.cooldown <= 0) {
+        u.state = "windup";
+        u.timer = 0.65;
+        u.cooldown = d.special ?? 4;
+        telegraph(w, u);
+        return vec();
+      }
+      if (dd > (d.range ?? 230) - 20) return scale(dirT, d.speed);
+      return scale(vec(-dirT.y * u.strafe, dirT.x * u.strafe), d.speed * 0.5);
+  }
+};
+
+/** The summoner: draws circles the wild dead crawl out of, throws rings of orbs, blinks away. */
+const summoner: Behaviour = (w, u, t, dt) => {
+  const d = u.def;
+  const dd = dist(u.pos, t.pos);
+  if (u.state === "ring") {
+    if (u.timer <= 0) {
+      const at = u.goal ?? u.pos;
+      for (let i = 0; i < 2; i++) {
+        const p = w.collideWorld(add(at, fromAngle(w.rng() * Math.PI * 2, 40)), 22);
+        const f = w.spawn("feral", p);
+        f.master = u.id;
+        w.events.push({ type: "summon", pos: { ...p } });
+      }
+      u.state = "reposition";
+      u.cooldown = d.special ?? 7;
+    }
+    return vec();
+  }
+  if (dd < 170 && u.cooldown2 <= 0) {
+    u.cooldown2 = 5;
+    const away = norm(sub(u.pos, t.pos));
+    const side = { x: -away.y, y: away.x };
+    w.events.push({ type: "dodge", pos: { ...u.pos }, dir: away });
+    u.pos = w.collideWorld(add(u.pos, add(scale(away, 260), scale(side, (w.rng() - 0.5) * 300))), u.radius);
+    return vec();
+  }
+  if (u.cooldown <= 0) {
+    const mine = w.units.filter((o) => o.alive && o.master === u.id).length;
+    if (mine < 4 && u.team !== "minion") {
+      u.state = "ring";
+      u.timer = 1.5;
+      u.goal = w.collideWorld(add(u.pos, scale(norm(sub(t.pos, u.pos)), Math.min(160, dd / 2))), 40);
+      addZone(w, { kind: "rite", pos: { ...u.goal }, radius: 70, life: 1.6, warn: 1.5, side: u.team, dps: 0, burst: 0, halves: 0 });
+      telegraph(w, u);
+      return vec();
+    }
+    // enough dead about: a ring of orbs instead
+    u.cooldown = 3.2;
+    const shot = d.shot!;
+    ring(w, u.pos, shot.count, shot.speed, w.rng() * Math.PI, { side: u.team, radius: shot.radius, look: shot.look, damage: u.team === "minion" ? 3 : CONFIG.hitOnMinion, halves: 1, life: shot.life ?? 5 });
+    w.events.push({ type: "shot", pos: { ...u.pos }, dir: vec(1, 0), side: u.team, fromPlayer: false });
+  }
+  return keepRange(w, u, t, dt);
+};
+
 const BEHAVIOURS: Record<Exclude<Unit["def"]["ai"], "boss">, Behaviour> = {
+  grenadier,
+  butcher,
+  flamer,
+  summoner,
   paviser,
   charger,
   gunner,

@@ -128,11 +128,63 @@ export function dropLoot(w: World, u: Unit): void {
   if (w.rng() < l.ammoDropChance) drop(w, "ammo", u.pos);
   if (w.rng() < l.keyDropChance) drop(w, "key", u.pos);
   if (w.rng() < l.heartDropChance) drop(w, "halfHeart", u.pos);
-  if (u.elite) {
+  // an elite fighter now and then carries the remains of a cursed weapon
+  if (u.elite && w.rng() < CONFIG.elites.remainsChance) {
     const legend = freshLegend(w);
     if (legend) drop(w, "remains", u.pos, 1, legend);
     else drop(w, "ammoBox", u.pos);
   }
+  // a champion pays for his gift: something more falls out of him
+  if (u.champion && w.rng() < 0.5) drop(w, pick(w.rng, ["halfHeart", "key", "ammo", "ammo"] as PickupKind[]), u.pos);
+}
+
+// ------------------------------------------------------------------ the trial room
+/** Begin a trial: the doors slam and the first wave is on its way. */
+function startTrial(w: World, it: Interactable): boolean {
+  const tr = w.trial;
+  if (!tr || tr.active || tr.done) return false;
+  it.used = true;
+  tr.active = true;
+  tr.wave = 0;
+  tr.t = 0.8;
+  w.alarm = true;
+  w.events.push({ type: "trial", stage: "start", wave: 0, waves: tr.waves.length, pos: { ...it.pos } });
+  return true;
+}
+
+/** While a trial runs: when a wave is dead, the next walks in; after the last, the reward. */
+export function updateTrial(w: World, dt: number): void {
+  const tr = w.trial!;
+  if (w.enemies.length > 0) return;
+  tr.t -= dt;
+  if (tr.t > 0) return;
+  const centre = vec(w.room.w / 2, w.room.h / 2);
+  if (tr.wave >= tr.waves.length) {
+    tr.active = false;
+    tr.done = true;
+    // the reward lies at the foot of the pillory
+    addChest(w, tr.depth >= 3 ? "reliquary" : "iron", add(centre, vec(0, 170)));
+    const legend = freshLegend(w);
+    if (legend) drop(w, "remains", add(centre, vec(110, 200)), 1, legend);
+    drop(w, "echo", add(centre, vec(-110, 200)), 3 + tr.depth);
+    w.events.push({ type: "trial", stage: "done", wave: tr.wave, waves: tr.waves.length, pos: centre });
+    return;
+  }
+  // they walk in along the walls, as far from the necromancer as the room allows
+  const m = CONFIG.room.wall + 120;
+  const spots = [vec(m, m), vec(w.room.w - m, m), vec(m, w.room.h - m), vec(w.room.w - m, w.room.h - m), vec(w.room.w / 2, m), vec(w.room.w / 2, w.room.h - m), vec(m, w.room.h / 2), vec(w.room.w - m, w.room.h / 2)]
+    .filter((p) => dist(p, w.player.pos) > CONFIG.trial.spawnSafe)
+    .sort((a, b) => dist(b, w.player.pos) - dist(a, w.player.pos));
+  tr.waves[tr.wave].forEach(([kind, gift], i) => {
+    const base = spots[i % Math.max(1, spots.length)] ?? centre;
+    const at = w.collideWorld(add(base, vec((w.rng() - 0.5) * 120, (w.rng() - 0.5) * 120)), 30);
+    const u = w.spawn(kind, at);
+    if (gift) u.champion = gift;
+    w.events.push({ type: "summon", pos: { ...at } });
+  });
+  tr.wave += 1;
+  tr.t = CONFIG.trial.pause;
+  w.events.push({ type: "trial", stage: "wave", wave: tr.wave, waves: tr.waves.length, pos: centre });
 }
 
 /** Remains of a legend the necromancer doesn't own yet. */
@@ -403,6 +455,8 @@ function useThing(w: World, it: Interactable): boolean {
       it.used = true;
       w.events.push({ type: "note", index: Number(it.ref ?? 0) });
       return true;
+    case "trial":
+      return startTrial(w, it);
     default:
       w.events.push({ type: "station", ref: it.ref ?? it.kind });
       return true;

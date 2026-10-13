@@ -12,7 +12,7 @@ import { CONFIG } from "./config.js";
 import { type Vec, vec } from "./math.js";
 import { floorDef, type FloorDef, type SecretFloorDef, type SecretId } from "./data/floors.js";
 import type { UnitKind } from "./data/units.js";
-import type { LightKind, Side } from "./types.js";
+import type { Champion, LightKind, Side } from "./types.js";
 import type { World } from "./world.js";
 import { addChest, placePickup, stockShop } from "./loot.js";
 import { pick } from "./shared.js";
@@ -161,7 +161,7 @@ function kindFor(def: FloorDef, role: SlotRole, rng: () => number): UnitKind {
 }
 
 /** A combat (or mini-boss) room from a template, peopled by the floor's factions. */
-export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorDef, guardCount: number, rng: () => number, opts: { elite?: boolean; mirror?: boolean } = {}): void {
+export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorDef, guardCount: number, rng: () => number, opts: { mirror?: boolean } = {}): void {
   const def = typeof depthOrDef === "number" ? floorDef(depthOrDef) : depthOrDef;
   const mirror = opts.mirror ?? false;
   const mx = (x: number, width = 0) => (mirror ? w.room.w - x - width : x);
@@ -179,19 +179,17 @@ export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorD
   let bellringer = false;
   let lamplighter = false;
   // some garrisons are drilled: their places go to the men of one formation (tactics.ts)
-  const drill = opts.elite ? null : drillFor(def, def.depth, rng);
+  const drill = drillFor(def, def.depth, rng);
   const drilled = (role: string): UnitKind | undefined =>
     !drill ? undefined : role === "r" ? drill.ranged : role === "m" || role === "p" ? drill.melee : role === "s" ? drill.special : undefined;
-  t.slots.slice(0, guardCount).forEach(([role, x0, y, route], i) => {
+  t.slots.slice(0, guardCount).forEach(([role, x0, y, route]) => {
     const pos = vec(mx(x0), y);
-    const elite = (opts.elite ?? false) && i === 0;
-    const kind = elite ? pick(rng, def.elite) : drilled(role) ?? kindFor(def, role, rng);
+    const kind = drilled(role) ?? kindFor(def, role, rng);
     const aware = t.light ? {} : { state: (role === "p" ? "patrol" : "idle") as "patrol" | "idle", route: route?.map(([rx, ry]) => vec(mx(rx), ry)) };
     w.spawn(kind, pos, undefined, {
       ...aware,
       lantern: role === "p",
       lamplighter: role === "l" && !lamplighter,
-      elite,
     });
     if (role === "l") lamplighter = true;
     if (kind === "bellringer") bellringer = true;
@@ -199,7 +197,64 @@ export function applyTemplate(w: World, t: Template, depthOrDef: number | FloorD
     if (kind === "sergeant") w.spawn("dog", vec(pos.x + 50, pos.y + 30), undefined, t.light ? {} : { state: "idle" });
   });
   if (bellringer && def.bells) w.addInteractable("bell", vec(mx(Math.round(w.room.w * 0.25)), 120), { radius: 60 });
+  addElites(w, def, rng);
   formSquads(w, rng, def.depth, drill);
+  addChampions(w, def.depth, rng);
+}
+
+const CHAMPIONS: Champion[] = ["swift", "armored", "explosive", "splitting", "healer", "shadow", "vengeful"];
+
+/** Now and then one of the floor's elite fighters stands among the guards (more often deeper). */
+export function addElites(w: World, def: FloorDef, rng: () => number): void {
+  const e = CONFIG.elites;
+  const guards = w.units.filter((u) => u.team !== "minion" && !u.def.boss && !u.lamplighter && u.kind !== "sergeant");
+  if (!guards.length || !def.elite.length || rng() >= Math.min(e.roomMax, e.roomBase + e.roomPerDepth * (def.depth - 1))) return;
+  // he takes the place of one ordinary man
+  const old = pick(rng, guards);
+  w.units = w.units.filter((u) => u !== old);
+  w.lights = w.lights.filter((l) => l.owner !== old.id);
+  w.spawn(pick(rng, def.elite), old.pos, undefined, old.state === "idle" || old.state === "patrol" ? { state: "idle" } : {});
+}
+
+/** Some ordinary men are champions: one gift each, an aura to tell them by. */
+export function addChampions(w: World, depth: number, rng: () => number, chanceMul = 1): void {
+  const c = CONFIG.champions;
+  const p = Math.min(c.max, c.base + c.perDepth * (depth - 1)) * chanceMul;
+  for (const u of w.units) {
+    if (u.team === "minion" || u.def.boss || u.elite || u.leader || u.mini || u.kind === "rat") continue;
+    if (rng() < p) u.champion = pick(rng, CHAMPIONS);
+  }
+}
+
+/**
+ * A trial room (instead of the old elite quarters): the template's furniture and lights, nobody
+ * home, a pillory of trial in the middle. Touch it and the doors slam: three or four waves, the
+ * last with elites and champions, then a chest, cursed remains and Echo.
+ */
+export function applyTrial(w: World, t: Template, def: FloorDef, rng: () => number, mirror: boolean): void {
+  applyTemplate(w, t, def, 0, rng, { mirror });
+  w.alarm = false;
+  const c = vec(w.room.w / 2, w.room.h / 2);
+  w.covers = w.covers.filter((cv) => Math.hypot(cv.x + cv.w / 2 - c.x, cv.y + cv.h / 2 - c.y) > 200);
+  w.addInteractable("trial", c, { radius: 110 });
+  w.addLight("brazier", vec(c.x - 150, c.y - 40));
+  w.addLight("brazier", vec(c.x + 150, c.y - 40));
+  const pool = (k: "melee" | "ranged" | "special") => def[k];
+  const waves: [UnitKind, Champion | ""][][] = [];
+  const count = 3 + (def.depth >= 3 ? 1 : 0);
+  for (let i = 0; i < count; i++) {
+    const n = 3 + i + Math.floor(def.depth / 2);
+    const wave: [UnitKind, Champion | ""][] = [];
+    for (let k = 0; k < n; k++) {
+      const role = k % 3 === 0 ? "ranged" : k % 3 === 1 ? "melee" : "special";
+      const gift = rng() < 0.12 + 0.1 * i ? pick(rng, CHAMPIONS) : "";
+      wave.push([pick(rng, pool(role)), gift]);
+    }
+    // the last waves bring the floor's elites
+    if (i >= count - 2 && def.elite.length) wave.push([pick(rng, def.elite), ""]);
+    waves.push(wave);
+  }
+  w.trial = { active: false, done: false, waves, wave: 0, t: 0, depth: def.depth };
 }
 
 /** The quiet room each floor starts in (the mass grave on the cemetery). */
@@ -318,7 +373,9 @@ export function applyGuardian(w: World, t: Template, def: SecretFloorDef, rng: (
   applyTemplate(w, t, def, 0, rng);
   w.alarm = true;
   const c = vec(w.room.w / 2, w.room.h * 0.4);
-  w.spawn(def.guardian, c, undefined, { elite: true });
+  const g = w.spawn(def.guardian, c);
+  // the guardian has one champion's gift of his own
+  g.champion = pick(rng, ["armored", "healer", "vengeful"] as Champion[]);
   def.escort.forEach((k, i) => w.spawn(k, vec(c.x + (i - 1) * 240, c.y + 160 + (i % 2) * 60)));
 }
 

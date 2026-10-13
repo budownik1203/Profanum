@@ -18,7 +18,7 @@ export interface FloorDef {
   melee: UnitKind[];
   ranged: UnitKind[];
   special: UnitKind[];
-  /** Candidates for the floor's mini-boss (an elite). */
+  /** The elite fighters met on this floor now and then (design: Elity). */
   elite: UnitKind[];
   /** What a template's covers become here. */
   flip: CoverKind;
@@ -39,7 +39,7 @@ export const FLOORS: FloorDef[] = [
     melee: ["peasant", "peasant", "feral", "feral", "torchbearer", "gravedigger"],
     ranged: ["witchhunter", "witchhunter", "peasant"],
     special: ["torchbearer", "gravedigger", "feral"],
-    elite: ["gravedigger", "witchhunter"],
+    elite: ["butcher", "summoner"],
     flip: "coffin", solid: "tomb",
     lightMap: { chandelier: "pyre", window: "torch", candelabra: "brazier" },
     barrels: 0.1, bells: false, extra: 0,
@@ -49,7 +49,7 @@ export const FLOORS: FloorDef[] = [
     melee: ["peasant", "halberdier", "halberdier", "torchbearer", "dog"],
     ranged: ["arquebusier", "arquebusier", "witchhunter", "sergeant"],
     special: ["dog", "sergeant", "torchbearer"],
-    elite: ["sergeant", "halberdier"],
+    elite: ["grenadier", "butcher"],
     flip: "cart", solid: "crate",
     lightMap: { chandelier: "brazier", window: "torch" },
     barrels: 0.35, bells: false, extra: 1,
@@ -59,7 +59,7 @@ export const FLOORS: FloorDef[] = [
     melee: ["halberdier", "halberdier", "feral", "dog"],
     ranged: ["arquebusier", "cultist", "alchemist", "sergeant"],
     special: ["alchemist", "cultist", "dog"],
-    elite: ["alchemist", "cultist", "sergeant"],
+    elite: ["grenadier", "summoner"],
     flip: "stall", solid: "crate",
     lightMap: { window: "torch" },
     barrels: 0.6, bells: false, extra: 1,
@@ -69,7 +69,7 @@ export const FLOORS: FloorDef[] = [
     melee: ["flagellant", "flagellant", "acolyte"],
     ranged: ["monk", "monk", "acolyte"],
     special: ["bellringer", "monk", "flagellant"],
-    elite: ["monk", "flagellant"],
+    elite: ["confessor"],
     flip: "pew", solid: "pillar",
     lightMap: {},
     barrels: 0.05, bells: true, extra: 2,
@@ -79,7 +79,7 @@ export const FLOORS: FloorDef[] = [
     melee: ["knight", "flagellant", "knight"],
     ranged: ["inquisitor", "inquisitor", "monk"],
     special: ["bellringer", "inquisitor", "knight"],
-    elite: ["knight", "inquisitor"],
+    elite: ["confessor", "grenadier"],
     flip: "pew", solid: "pillar",
     lightMap: {},
     barrels: 0, bells: true, extra: 2,
@@ -114,11 +114,11 @@ export const SECRET_FLOORS: Record<SecretId, SecretFloorDef> = {
     melee: ["feral", "feral", "feral", "gravedigger"],
     ranged: ["cultist", "cultist", "alchemist"],
     special: ["alchemist", "cultist", "feral"],
-    elite: ["feral"],
+    elite: ["summoner"],
     flip: "coffin", solid: "tomb",
     lightMap: { chandelier: "brazier", window: "torch", candelabra: "candle" },
     barrels: 0.1, bells: false, extra: 1,
-    under: [1, 2], guardian: "abomination", escort: ["feral", "cultist", "feral"], echo: 10,
+    under: [1, 2], guardian: "summoner", escort: ["feral", "cultist", "feral"], echo: 10,
   },
   // the Inquisition's dungeons under the merchants' quarter and the monastery: cells, racks, chains
   lochy: {
@@ -126,11 +126,11 @@ export const SECRET_FLOORS: Record<SecretId, SecretFloorDef> = {
     melee: ["flagellant", "flagellant", "knight", "halberdier"],
     ranged: ["inquisitor", "arquebusier", "monk"],
     special: ["monk", "inquisitor", "flagellant"],
-    elite: ["inquisitor", "knight"],
+    elite: ["confessor", "butcher"],
     flip: "table", solid: "pillar",
     lightMap: { chandelier: "brazier", window: "torch" },
     barrels: 0.3, bells: false, extra: 2,
-    under: [3, 4], guardian: "knight", escort: ["inquisitor", "flagellant", "flagellant"], echo: 14,
+    under: [3, 4], guardian: "confessor", escort: ["inquisitor", "flagellant", "flagellant"], echo: 14,
   },
 };
 

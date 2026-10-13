@@ -31,7 +31,8 @@ const unitKinds = Object.keys(UNITS) as UnitKind[];
 
 /** The grimoire's chapters, in the order of the tabs. */
 export const CODEX_SECTIONS: CodexSection[] = [
-  { id: "enemies", entries: unitKinds.filter((k) => !UNITS[k].boss) },
+  // ordinary men first, the elites at the end of the chapter
+  { id: "enemies", entries: unitKinds.filter((k) => !UNITS[k].boss).sort((a, b) => Number(!!UNITS[a].elite) - Number(!!UNITS[b].elite)) },
   { id: "bosses", entries: unitKinds.filter((k) => UNITS[k].boss) },
   // ordinary weapons first, the legends last
   { id: "weapons", entries: (Object.keys(WEAPONS) as WeaponId[]).sort((a, b) => Number(WEAPONS[a].rarity === "legend") - Number(WEAPONS[b].rarity === "legend")) },

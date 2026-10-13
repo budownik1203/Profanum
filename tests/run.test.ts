@@ -144,7 +144,7 @@ test("a key opens the trapdoor; the secret floor leads down to the next floor", 
   const guard = run.floor.rooms.find((r) => r.type === "guardian")!;
   run.floor.travel("N", guard.id);
   const elite = run.world.units.find((u) => u.elite);
-  assert.ok(elite && elite.kind === "abomination", "the ossuary's guardian");
+  assert.ok(elite && elite.kind === "summoner" && elite.champion, "the ossuary's guardian: a summoner with a champion's gift");
   for (const u of run.world.units) u.hp = 0.01;
   run.world.player.pos = { x: run.world.room.w / 2, y: run.world.room.h - 200 };
   ev = [];

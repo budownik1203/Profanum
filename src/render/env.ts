@@ -726,6 +726,23 @@ export function drawInteractable(g: Graphics, glow: Graphics, it: Interactable, 
       if (highlight) glow.circle(x, y - 26, 56).fill({ color: PAL.soul, alpha: 0.08 });
       break;
     }
+    case "trial": {
+      // the pillory of trial: a stocks-frame on a stone step, a red sash, iron rings for the condemned
+      const used = it.used;
+      g.ellipse(x, y + 40, 90, 20).fill({ color: PAL.ink, alpha: 0.6 });
+      g.rect(x - 70, y + 10, 140, 26).fill(0x4a4644).stroke({ width: 4, color: PAL.ink });
+      g.rect(x - 8, y - 70, 16, 82).fill(0x4a3220).stroke({ width: 4, color: PAL.ink });
+      g.rect(x - 56, y - 64, 112, 26).fill(0x5a3e28).stroke({ width: 4, color: PAL.ink });
+      for (const ox of [-34, 0, 34]) g.circle(x + ox, y - 51, ox === 0 ? 8 : 6).fill(0x140e0a).stroke({ width: 2, color: PAL.ink });
+      g.moveTo(x - 56, y - 64).lineTo(x + 56, y - 64).stroke({ width: 3, color: PAL.iron });
+      g.poly([x + 10, y - 38, x + 22, y - 38, x + 18, y + 4, x + 12, y + 8]).fill(used ? 0x4a1a14 : 0x9e1f14).stroke({ width: 2, color: PAL.ink });
+      if (!used) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+        glow.circle(x, y - 40, 60).fill({ color: PAL.telegraph, alpha: 0.05 + 0.05 * pulse });
+      }
+      if (highlight) glow.circle(x, y - 30, 70).fill({ color: PAL.soul, alpha: 0.08 });
+      break;
+    }
     default:
       break;
   }
@@ -917,6 +934,19 @@ export function drawZone(g: Graphics, glow: Graphics, z: Zone, t: number): void 
           glow.circle(x + (hash(i + 7, z.id) - 0.5) * z.radius * 1.2, y - k * 50, 3 + 2 * (1 - k)).fill({ color: 0xb8d86a, alpha: 0.5 * (1 - k) * fade });
         }
       }
+      break;
+    }
+    case "rite": {
+      // a summoning circle scratched in the floor: runes that glow green until something climbs out
+      const k = 1 - z.warn / Math.max(0.01, z.warnMax ?? 1);
+      glow.circle(x, y, z.radius).stroke({ width: 3, color: 0x6ad46a, alpha: 0.5 + 0.4 * k });
+      glow.circle(x, y, z.radius * 0.72).stroke({ width: 2, color: 0x6ad46a, alpha: 0.35 + 0.4 * k });
+      for (let i = 0; i < 5; i++) {
+        const a = t * 0.6 + (i / 5) * Math.PI * 2;
+        const b = a + (Math.PI * 4) / 5;
+        glow.moveTo(x + Math.cos(a) * z.radius * 0.72, y + Math.sin(a) * z.radius * 0.72).lineTo(x + Math.cos(b) * z.radius * 0.72, y + Math.sin(b) * z.radius * 0.72).stroke({ width: 2, color: 0x6ad46a, alpha: 0.3 + 0.4 * k });
+      }
+      g.circle(x, y, z.radius * k * 0.6).fill({ color: 0x0a120a, alpha: 0.7 });
       break;
     }
     case "exorcism": {

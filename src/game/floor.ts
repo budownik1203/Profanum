@@ -9,7 +9,7 @@ import { FLOORS, SECRET_FLOORS, floorDef, type SecretFloorDef, type SecretId } f
 import type { UnitKind } from "./data/units.js";
 import { WEAPONS } from "./data/weapons.js";
 import {
-  TEMPLATES, type RoomType, applyAltar, applyGuardian, applyLanding, applySecret, applyShop, applyStart, applyTemplate, applyTreasure, applyVault, roomSize,
+  TEMPLATES, type RoomType, applyAltar, applyGuardian, applyLanding, applySecret, applyShop, applyStart, applyTemplate, applyTreasure, applyTrial, applyVault, roomSize,
   templateByName,
 } from "./rooms.js";
 import { setupBossArena } from "./bosses.js";
@@ -303,10 +303,14 @@ export class Floor {
       case "final":
         setupBossArena(w, this.boss, this.depth, rng);
         break;
+      case "miniboss":
+        // the trial room (it took the elite quarters' place on the map)
+        applyTrial(w, template!, sec ?? floorDef(this.depth), rng, node.mirror);
+        break;
       default: {
         const t = template!;
         const guards = Math.min(t.slots.length, 3 + def.extra + Math.floor(node.depth / 2));
-        applyTemplate(w, t, sec ?? this.depth, guards, rng, { elite: node.type === "miniboss", mirror: node.mirror });
+        applyTemplate(w, t, sec ?? this.depth, guards, rng, { mirror: node.mirror });
       }
     }
     // in ordinary rooms a doorway may open off the middle of its wall (special rooms keep theirs

@@ -16,6 +16,8 @@ export type UnitKind =
   | "monk" | "flagellant" | "inquisitor" | "knight" | "bellringer" | "acolyte"
   // others
   | "mimic" | "abomination" | "rat"
+  // elites: one fighter of each faction, met now and then among the ordinary guards
+  | "grenadier" | "butcher" | "confessor" | "summoner"
   // bosses: three a floor, then the Holy Flame
   | "executioner" | "exorcist" | "mourner"
   | "captain" | "ratcatcher" | "mobleader"
@@ -40,6 +42,10 @@ export type AiKind =
   | "bellringer" // runs to the bell when the alarm sounds
   | "brute" // stitched abomination: slow, heavy slams
   | "paviser" // carries a great shield and plants it before the musket line
+  | "grenadier" // elite of the watch: grenades thrown in threes, the musket butt up close
+  | "butcher" // elite of the mob: a meat hook that pulls you in, two cleaver blows
+  | "flamer" // elite of the Church: sprays holy fire in a sweeping cone
+  | "summoner" // elite of the occultists: circles the wild dead crawl out of, rings of orbs
   | "boss";
 
 export interface ShotDef {
@@ -99,6 +105,8 @@ export interface UnitDef {
   /** Drawing scale (1 = a man). */
   size: number;
   boss?: boolean;
+  /** An elite fighter (design: Elity): rarer, dangerous, may carry weapon remains. */
+  elite?: boolean;
 }
 
 const D = (d: UnitDef): UnitDef => d;
@@ -131,6 +139,28 @@ export const UNITS: Record<UnitKind, UnitDef> = {
     kind: "dog", faction: "beast", ai: "rusher", hp: 4, radius: 16, speed: 270,
     reach: 46, windup: 0.22, recover: 0.5, melee: 2, smell: 280,
     gold: [0, 0], raisable: true, size: 0.75,
+  }),
+  // ---------------------------------------------------------------- elites
+  grenadier: D({
+    kind: "grenadier", faction: "guard", ai: "grenadier", hp: 24, radius: 23, speed: 120,
+    range: 400, reposition: [1.0, 1.6], special: 3.4, area: 85, reach: 60, windup: 0.35, recover: 0.7, melee: 4,
+    gold: [6, 10], raisable: true, size: 1.05, elite: true,
+  }),
+  butcher: D({
+    kind: "butcher", faction: "mob", ai: "butcher", hp: 30, radius: 25, speed: 140,
+    reach: 92, windup: 0.45, recover: 0.9, melee: 6, special: 5,
+    gold: [5, 9], raisable: true, size: 1.1, elite: true,
+  }),
+  confessor: D({
+    kind: "confessor", faction: "church", ai: "flamer", hp: 26, radius: 23, speed: 105,
+    range: 230, special: 4, light: "censer", lightRadius: 140,
+    gold: [6, 10], raisable: true, size: 1.05, elite: true,
+  }),
+  summoner: D({
+    kind: "summoner", faction: "occult", ai: "summoner", hp: 22, radius: 21, speed: 110,
+    range: 420, reposition: [1.2, 2], special: 7,
+    shot: { count: 10, spread: 0, speed: 165, radius: 11, look: "orb", life: 5 },
+    gold: [6, 10], raisable: true, size: 1.02, elite: true,
   }),
   // ---------------------------------------------------------------- the mob
   peasant: D({

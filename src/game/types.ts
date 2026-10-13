@@ -221,7 +221,28 @@ export interface Unit {
   tac?: Tactic;
   /** Walking to a corpse to burn it (its id), and how long the burning still takes. */
   pyre?: { corpse: number; t: number };
+  /** A champion: an ordinary man with one gift, shown by a coloured aura (design: Elity). */
+  champion?: Champion;
+  /** Champion's own clock (the healer's prayer). */
+  champT?: number;
+  /** Raised by a summoner (his id): the summoner keeps only so many. */
+  master?: number;
   alive: boolean;
+}
+
+/** The gifts of champions (like Isaac's): each shows as a coloured aura round the feet. */
+export type Champion = "swift" | "armored" | "explosive" | "splitting" | "healer" | "shadow" | "vengeful";
+
+/** A trial room's state: the waves still to come and the reward at the end. */
+export interface Trial {
+  active: boolean;
+  done: boolean;
+  /** The waves, each a list of [kind, champion gift or ""]. */
+  waves: [UnitKind, Champion | ""][][];
+  wave: number;
+  /** Seconds until the next wave walks in. */
+  t: number;
+  depth: number;
 }
 
 /** A soldier's part in his squad (see tactics.ts). */
@@ -396,7 +417,7 @@ export interface Bullet {
   snuff?: boolean;
 }
 
-export type ZoneKind = "fire" | "plague" | "exorcism" | "slam" | "holyfire" | "blast" | "glass" | "trap" | "ink";
+export type ZoneKind = "fire" | "plague" | "exorcism" | "slam" | "holyfire" | "blast" | "glass" | "trap" | "ink" | "rite";
 
 /** A lasting or telegraphed area on the floor. */
 export interface Zone {
@@ -465,7 +486,7 @@ export interface Chest {
   mimic: boolean;
 }
 
-export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger" | "hatch" | "codex";
+export type InteractKind = "altar" | "fence" | "stairs" | "bell" | "note" | "secret" | "station" | "sarcophagus" | "echoAltar" | "skull" | "ledger" | "hatch" | "codex" | "trial";
 
 export interface Interactable {
   id: number;
@@ -536,6 +557,14 @@ export type GameEvent =
   | { type: "corpseBurned"; pos: Vec }
   /** A paviser set his great shield in the ground. */
   | { type: "pavise"; pos: Vec }
+  /** The butcher's hook flew out (and caught someone, or not). */
+  | { type: "hook"; from: Vec; to: Vec; hit: boolean }
+  /** Something crawled out of a summoning circle, or walked in with a trial's wave. */
+  | { type: "summon"; pos: Vec }
+  /** A trial room: it began, a wave came in, it was won. */
+  | { type: "trial"; stage: "start" | "wave" | "done"; wave: number; waves: number; pos: Vec }
+  /** A champion's gift showed itself on his death (a blast, a split, a ring of light). */
+  | { type: "championDeath"; pos: Vec; champion: Champion }
   | { type: "explosion"; pos: Vec; radius: number }
   | { type: "fire"; pos: Vec; radius: number }
   | { type: "bulletWall"; pos: Vec }

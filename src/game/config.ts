@@ -60,7 +60,11 @@ export const CONFIG = {
   hitOnMinion: 3,
 
   /** Elite guards (mini-bosses): tougher, bigger, they drop weapon remains. */
-  elite: { hpMul: 2.6, sizeMul: 1.2 },
+  /** Elites and champions in ordinary rooms (design: Elity): chance per room / per guard, base + per floor. */
+  elites: { roomBase: 0.12, roomPerDepth: 0.07, roomMax: 0.5, remainsChance: 0.35 },
+  champions: { base: 0.04, perDepth: 0.03, max: 0.25, armoredTaken: 0.5, swift: 1.4, healEvery: 3, heal: 4, healRange: 220 },
+  /** The trial room: waves until it's won, a pause between them. */
+  trial: { pause: 1.4, spawnSafe: 380 },
 
   /** Necromancy: souls, raising the dead, minions. */
   necro: {
