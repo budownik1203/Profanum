@@ -2,6 +2,7 @@
 
 Nekromanta spalony na stosie wraca, by wyrżnąć miasto i Kościół Świętego Płomienia.
 Roguelike bullet hell w duchu *Enter the Gungeon*, ze stylem inspirowanym *Darkest Dungeon*.
+Grafika i dźwięk powstają w całości w kodzie: postacie rysuje PixiJS, a dźwięk syntezuje WebAudio.
 
 Dokument projektowy żyje osobno (Claude Docs: „Profanum — Dokument Projektowy”).
 
@@ -15,113 +16,100 @@ npm run dev
 ```
 
 Vite wypisze adres (zwykle http://localhost:5173), otwórz go w przeglądarce.
-
-Inne skrypty:
+Dźwięk włącza się po pierwszym kliknięciu albo klawiszu, bo przeglądarki nie pozwalają grać od razu.
 
 | Skrypt | Co robi |
 | --- | --- |
-| `npm test` | Testy logiki walki (bez grafiki), w Node |
+| `npm test` | Kompiluje i uruchamia testy logiki w Node (bez grafiki), w tym całą wyprawę graną przez bota |
 | `npm run typecheck` | Sprawdzenie typów całego projektu |
 | `npm run build` | Wersja produkcyjna do katalogu `dist/` |
+| `npm run artifact` | Jeden plik HTML z grą (PixiJS z CDN) do `dist/profanum.html` |
+| `npm run shots` | Zrzuty ekranu przez Chromium (PixiJS podmieniany na prosty shim na Canvas2D) |
+
+Narzędzia w `tools/` (po `npm test`, bo korzystają ze skompilowanego `.test-build/`):
+
+| Polecenie | Co robi |
+| --- | --- |
+| `node tools/fullrun.mjs [n] [god\|mortal] [postać]` | Bot przechodzi całe wyprawy: czas, pokoje, utknięcia, bossowie, wydajność kroku |
+| `node tools/balance.mjs [n] [broń]` | Bot walczy z każdym bossem: czas zabicia i utracone serca |
+| `node tools/shot.mjs <strona> <katalog> <scenariusz>` | Zrzuty według scenariusza z `tools/scenarios/` (tour, bosses, items, crypt, audio) |
 
 ## Sterowanie
 
 | Akcja | Klawisz |
 | --- | --- |
 | Ruch | WSAD |
-| Celowanie | Mysz (strzałem gasisz świece) |
-| Strzał | LPM |
-| Rozpad w mgłę (unik, nietykalność) | PPM albo lewy Shift |
+| Celowanie i strzał | Mysz, LPM (strzałem gasisz też świece, pochodnie i koksowniki) |
+| Rozpad w mgłę (unik z nietykalnością) | PPM albo Shift |
 | Przeładowanie | R |
-| Przewróć ławkę jako osłonę | Spacja (stojąc przy ławce) |
-| Wskrześ świeżego trupa (za duszę) | E (stojąc przy trupie) |
-| Wyślij sługi na wskazany punkt | Q |
-| Przejście do sąsiedniego pokoju | wyjdź przez otwarte drzwi w ścianie |
-| Nowe piętro po śmierci albo wygranej | Enter |
+| Wskrześ trupa, otwórz skrzynię, weź przedmiot, kup, ołtarz | E |
+| Rozkaz dla sług: idźcie tam | Q |
+| Relikwia | F |
+| Sznur Wiedźmy | C |
+| Przewróć ławkę lub stół jako osłonę | Spacja |
+| Zmiana broni | 1–9, kółko myszy |
+| Pauza (sterowanie i ekwipunek) | Esc |
 
-## Kamień milowy 1: walka w jednym pokoju
+## Co jest w grze
 
-- Grabarz z pistoletem skałkowym: jeden strzał, mocne trafienie, wolne przeładowanie (1,6 s).
-- Rozpad w mgłę: krótka nietykalność i zryw w kierunku ruchu.
-- Serca liczone połówkami, krótka nietykalność po trafieniu.
-- Halabardnicy: podchodzą, sygnalizują atak czerwoną linią i szarżują.
-- Arkebuzerzy: trzymają dystans, celują (widać żarzący się lont) i strzelają wolnymi kulami.
-- Ławki: stojące blokują ruch, ale kule nad nimi przelatują. Przewrócone zatrzymują kule i pękają od ostrzału.
-- Krew i trupy zostają na posadzce do końca walki, do tego dym prochowy, wstrząsy ekranu i zamrożenie klatki przy zabójstwie.
-
-## Kamień milowy 2: nekromancja
-
-- Zabity strażnik zostawia trupa i duszę. Dusza unosi się nad ciałem kilka sekund i trzeba po nią podejść.
-- Świeży trup żarzy się, póki można go wskrzesić (6 s). E wskrzesza go za jedną duszę.
-- Sługa zachowuje rolę z życia: halabardnik szarżuje, arkebuzer strzela. Maksymalnie 3 sługi naraz.
-- Sługa rozpada się po 30 s (migocze przed końcem) i zostawia ciało, które można wskrzesić jeszcze raz.
-- Q wysyła sługi na wskazany punkt: idą tam i walczą ze strażnikami w pobliżu.
-- Strażnicy atakują najbliższy cel: ciebie albo sługę. Sługa w linii strzału przyjmuje kulę na siebie.
-- Trupy zostają na posadzce do końca walki.
-
-## Kamień milowy 3: mrok i zasadzka
-
-- Pokój zaczyna się w mroku. Strażnicy stoją, modlą się albo patrolują z latarnią i nie wiedzą, że tu jesteś.
-- Widzą cię, gdy wejdziesz w światło, podejdziesz bardzo blisko albo błyśniesz wystrzałem w ich pobliżu.
-  Przewrócenie ławki koło nich też ich budzi. Wtedy pada ALARM i rusza cała sala.
-- Pierwszy strzał z mroku to zasadzka: podwójne obrażenia (zabija halabardnika jednym strzałem).
-- Światła gasisz strzałem, żeby powiększyć mrok (szczegóły w sekcji „Światło”).
-- W świetle zadajesz mniej obrażeń. Święte światło witraży po kilku sekundach zaczyna parzyć (pół serca co 3 s).
-- W mroku sługi biją mocniej i wolniej się rozpadają, w świetle rozpadają się szybciej i dostają mocniej.
-- Strażnik z latarnią po śmierci upuszcza ją, a latarnia dalej świeci na posadzce.
-- W mroku widać tylko żarzące się oczy, dusze, płomienie i kule. HUD pokazuje, czy stoisz w świetle i czy cię wykryto.
-
-## Kamień milowy 4: piętro
-
-- Piętro to 8 pokoi na siatce, połączonych drzwiami: grób zbiorowy (start), pokoje walki, ossuarium i komnata kapitana.
-- Pokoje walki mają cztery układy: Nawa, Krypta, Zbrojownia i Kaplica (pokój światła, w którym walka zaczyna się od razu).
-  Im dalej od startu, tym więcej strażników.
-- Drzwi zatrzaskują się przy alarmie i otwierają po wyczyszczeniu pokoju. Przed alarmem można się wycofać.
-- Sługi przechodzą z tobą przez drzwi. Krew i trupy zostają w pokojach, które opuściłeś.
-- Ossuarium ma ołtarz kości: raz leczy (do jednego serca) i daje 2 dusze.
-- Komnata kapitana jest najdalej od startu. Kapitan Straży (na razie silniejszy halabardnik z pasem zdrowia) z oddziałem.
-  Jego pokonanie kończy piętro.
-- Minimapa w prawym górnym rogu: odwiedzone pokoje, ich sąsiedzi, ossuarium i komnata kapitana.
-
-## Światło: jasne sale, mrok trzeba wywalczyć
-
-- Sale są jasno oświetlone (ok. 35–65% posadzki), mrok leży na krańcach i w rogach.
-  Każde drzwi prowadzą w kieszeń cienia: stamtąd wybierasz cel i otwierasz walkę zasadzką.
-- Źródła światła:
-  - **świeca**: jeden strzał;
-  - **kandelabr**: dwa strzały, pierwszy zbija część świec i zmniejsza krąg światła;
-  - **pochodnia** na ścianie: jeden strzał;
-  - **żyrandol** nad środkiem sali: dwa strzały w ramę. Łańcuch pęka, żyrandol spada po chwili,
-    miażdży wszystkich pod sobą (strażników i sługi, ciebie też trafi) i gasi środek sali;
-  - **witraż**: święte światło, którego nie da się zgasić. Strzał w szybę sypie szkłem na strażników
-    w jego świetle, a światło przestaje być święte.
-- Parzy tylko święte światło (witraże). Zwykłe światło tylko cię odkrywa i osłabia.
-- **Latarnik**: wybrany strażnik z kagankiem na tyczce. Idzie do zgaszonego światła i po chwili je zapala,
-  przed alarmem i w trakcie walki. Nie zapali spadłego żyrandola ani witraża.
-  Pierwszy do odstrzału, jeśli chcesz utrzymać mrok.
-- Spadający żyrandol i pękający witraż robią hałas: budzą strażników w pobliżu.
-
-Cała grafika to na razie stylizowane placeholdery w palecie gry. Sprite'y według przewodnika stylu dojdą później.
+- **Wyprawa**: pięć pięter (Cmentarz, Slumsy, Dzielnica kupiecka, Klasztor, Katedra) i Sanktuarium Płomienia.
+  Każde piętro ma 10–12 pokoi: walki, skarbiec, Paser, ołtarz, mini-boss, boss i ukryte katakumby za pękniętą ścianą.
+  Run zapisuje się na początku każdego piętra.
+- **Walka o światło**: sale są jasne, mrok leży na krańcach. Gasisz światła strzałami, żeby wywalczyć mrok.
+  W mroku zasadzka zadaje podwójne obrażenia, a sługi biją mocniej. Święte światło (witraże, stosy) parzy.
+  Latarnicy zapalają zgaszone światła.
+- **Nekromancja**: zabici zostawiają trupy i dusze. Wskrzeszasz ich jako sługi, które zachowują rolę z życia.
+  Z trzech trupów zszywasz abominację. Szczątki przeklętej broni wskrzeszasz na ołtarzu jako legendę.
+- **Wrogowie**: 25 rodzajów w czterech frakcjach (straż miejska i motłoch, Kościół, okultyści, nieumarli).
+  Okultyści walczą ze wszystkimi.
+- **Bossowie**: Kat Miejski, Kapitan Straży, Mistrz Prochu, Biskup Procesji, Wielki Inkwizytor i Święty Płomień.
+  Każdy ma swoją arenę i fazy, a ataki zapowiada na podłodze. W świetle jest silniejszy.
+- **Arsenał**: 18 broni (palne, kusze, okultystyczne za dusze), 4 legendy z klątwami, 18 przedmiotów,
+  7 relikwii i 5 synergii.
+- **Krypta**: między wyprawami są tu sarkofagi 6 postaci z historiami, ołtarz Echa (odblokowania),
+  gadająca czaszka z opowieścią odblokowywaną postępami i rejestr zmarłych ze statystykami.
+- **Oprawa**: tusz i czerń w duchu DD, krew zostająca na posadzce, filtr filmu (ziarno, desaturacja)
+  oraz narrator z czarnym humorem (napisy PL/EN).
+  Dźwięk to proch, przybitka, krew, dzwony i szkło, a muzyka to organy i chór, które w walce przechodzą w kotły i dysonans.
+- **Opcje**: wstrząsy ekranu, głośność efektów i muzyki, liczby obrażeń, filtr filmu, Tryb Łaski i język.
 
 ## Struktura
 
 ```
 src/
-  game/        czysta logika (bez PixiJS) - testowana w Node
-    config.ts  wszystkie liczby do balansu w jednym miejscu
-    math.ts    wektory, kolizje, deterministyczny RNG
-    world.ts   symulacja pokoju: gracz, broń, wrogowie, sługi, światło i mrok, drzwi, zdarzenia
-    rooms.ts   szablony pokoi (Nawa, Krypta, Kaplica, Zbrojownia, start, ossuarium, boss)
-    floor.ts   generator piętra, przejścia między pokojami
-  render/
-    renderer.ts  widok w PixiJS v8: placeholdery, krew, cząsteczki, HUD
-  input.ts     klawiatura i mysz
-  palette.ts   paleta gry
-  main.ts      start, pętla ze stałym krokiem, hit-stop, restart
-tests/
-  world.test.ts
+  game/              czysta logika (bez PixiJS), testowana w Node
+    data/            tabele: units (wrogowie), weapons, items (postacie, przedmioty, relikwie, synergie), floors
+    config.ts        liczby do balansu w jednym miejscu
+    types.ts         typy symulacji i zdarzeń
+    world.ts         pokój: gracz, jednostki, pociski, światła, drzwi; orkiestruje systemy
+    ai.ts            zachowania wrogów i sług
+    combat.ts        obrażenia, pociski, wybuchy, strefy na podłodze
+    shooting.ts      bronie gracza
+    lighting.ts      światła, latarnicy, żyrandole, witraże
+    loot.ts          łupy, skrzynie, Paser, ołtarze, wskrzeszanie
+    relics.ts        relikwie i sznur Wiedźmy
+    bosses.ts        areny i skrypty bossów
+    rooms.ts         szablony pokoi
+    floor.ts         generator piętra i przejścia
+    run.ts           cała wyprawa, zapis
+    meta.ts          to, co przetrwa śmierć: Echo, odblokowania, statystyki, ustawienia
+    hub.ts           krypta
+  render/            widok w PixiJS v8: postacie, bossowie, otoczenie, ikony, HUD, menu
+  audio.ts           dźwięk i muzyka (WebAudio, wszystko syntezowane)
+  narrator.ts        kwestie narratora i opowieść czaszki
+  i18n.ts            teksty PL/EN
+  main.ts            start, pętla ze stałym krokiem, tryby gry, menu, haczyk do testów w przeglądarce
+tests/               testy Node (node:test) i bot: bot.ts (walka), runner.ts (cała wyprawa)
+tools/               budowa pliku HTML, zrzuty przez Chromium, balans i całe wyprawy botem
 ```
 
-Logika jest oddzielona od rysowania: `World.update()` przyjmuje wejście i zwraca listę zdarzeń
-(strzał, trafienie, śmierć, przewrócenie osłony…), a renderer zamienia je na efekty.
-Dzięki temu walkę da się testować i balansować bez uruchamiania przeglądarki.
+## Stan
+
+Gotowe są wszystkie elementy zakresu z dokumentu poza tymi, które dokument odkłada na później:
+
+- po 3 bossów na piętro (teraz jeden na piętro),
+- docelowe sprite'y cut-out (teraz parametryczne figury w kodzie),
+- nagrany narrator (teraz napisy),
+- wersja desktop i Steam.
+
+Balans liczbowy wymaga prawdziwych graczy. Bot przechodzi całe wyprawy w trybie nieśmiertelności i daje tylko przybliżenie.

@@ -9,6 +9,8 @@ import { add, dist, len, norm, scale, sub, vec } from "../src/game/math.js";
 import { CONFIG } from "../src/game/config.js";
 import { PUTOUT_KINDS } from "../src/game/lighting.js";
 import { bossLit } from "../src/game/combat.js";
+import { WEAPONS } from "../src/game/data/weapons.js";
+import { soulCost } from "../src/game/shooting.js";
 
 export interface BotMemory {
   strafe: number;
@@ -83,8 +85,10 @@ export function botInput(w: World, m: BotMemory, dt: number, keep = 380): InputS
     // fight for the dark: a boss in light (or shielded by its braziers) first loses its lights
     if (target.def.boss) {
       const shielded = target.boss?.mem.shield === 1;
-      if (shielded || bossLit(w, target)) {
-        const lights = w.lights.filter((l) => l.on && PUTOUT_KINDS.includes(l.kind) && (shielded ? l.kind === "brazier" : dist(l.pos, target.pos) < l.radius) && dist(l.pos, p.pos) < 900);
+      // a few seconds on the lights, a few on the boss: a lit boss still bleeds, only less
+      const lightTurn = shielded || w.time % 7 < 3;
+      if (lightTurn && (shielded || bossLit(w, target))) {
+        const lights = w.lights.filter((l) => l.on && PUTOUT_KINDS.includes(l.kind) && (shielded ? l.kind === "brazier" : dist(l.pos, target.pos) < l.radius) && dist(l.pos, p.pos) < 700);
         lights.sort((a, b) => dist(a.pos, p.pos) - dist(b.pos, p.pos));
         if (lights[0]) {
           input.aim = World.hitPoint(lights[0]);
@@ -94,7 +98,16 @@ export function botInput(w: World, m: BotMemory, dt: number, keep = 380): InputS
         }
       }
     }
-    if (!lightAim && p.current !== p.weapons.length - 1) input.slot = p.weapons.length - 1;
+    if (!lightAim) {
+      // the newest gun that can still fire (occult ones need souls, the others ammunition)
+      let best = 0;
+      p.weapons.forEach((slot, i) => {
+        const def = WEAPONS[slot.id];
+        const ok = def.kind === "occult" ? p.souls >= soulCost(w, slot, def) : slot.ammo > 0;
+        if (ok) best = i;
+      });
+      if (p.current !== best) input.slot = best;
+    }
   }
   // souls hovering nearby are worth a detour, fresh bodies are worth raising
   const soul = w.souls.filter((x) => dist(x.pos, p.pos) < 260).sort((a, b) => dist(a.pos, p.pos) - dist(b.pos, p.pos))[0];
