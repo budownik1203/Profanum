@@ -15,6 +15,9 @@ import { CHAMPION_COLOR, drawPlayer, drawUnit, type Motion } from "./figures.js"
 import { VIEW_H, VIEW_W } from "./hud.js";
 import { TextPool } from "./text.js";
 
+/** An uneven flicker in -1..1, shared by a flame and its pool of light so they breathe together. */
+const flickN = (t: number, id: number): number => 0.5 * Math.sin(t * 7.3 + id) + 0.3 * Math.sin(t * 13.1 + id * 2.7) + 0.2 * Math.sin(t * 23.9 + id * 5.1);
+
 interface Particle {
   x: number;
   y: number;
@@ -24,7 +27,7 @@ interface Particle {
   max: number;
   size: number;
   color: number;
-  kind: "smoke" | "blood" | "spark" | "chunk" | "mist" | "splinter" | "glass" | "ash";
+  kind: "smoke" | "blood" | "spark" | "chunk" | "mist" | "splinter" | "glass" | "ash" | "flash" | "dust";
 }
 
 interface Floater {
@@ -96,6 +99,9 @@ export class GameRenderer {
   /** Player options. */
   shakeScale = 1;
   showNumbers = true;
+  /** Dust motes floating in the light ("Efekty: pełne"); off = "niskie". */
+  dust = true;
+  private dustCount = 0;
 
   constructor(private renderer: Renderer) {
     this.decals = RenderTexture.create({ width: CONFIG.room.width, height: CONFIG.room.height });
@@ -209,11 +215,13 @@ export class GameRenderer {
             for (let i = 0; i < 16; i++) this.spawn(e.pos, e.dir.x * rnd(200, 600) + rnd(-200, 200), e.dir.y * rnd(200, 600) + rnd(-200, 200), rnd(0.2, 0.4), rnd(6, 12), 0xcfc4a8, "mist");
           } else if (!e.silent) {
             this.puff(e.pos, e.dir, e.fromPlayer ? 9 : 6);
+            if (e.fromPlayer) this.spawn(e.pos, 0, 0, 0.07, 22, PAL.emberHot, "flash");
           }
           this.addShake(e.fromPlayer ? (e.weapon === "hakownica" || e.weapon === "headsman" || e.weapon === "organ" ? 12 : 7) : 3);
           break;
         case "enemyHit":
           this.spray(e.pos, e.dir, 14, 1);
+          this.spark(e.pos, 6);
           this.addShake(5);
           if (this.showNumbers) this.number(e.pos, e.amount, e.crit || e.ambush);
           if (e.ambush) this.floatText(e.pos, t("float.ambush"), PAL.ember);
@@ -278,7 +286,7 @@ export class GameRenderer {
           for (let i = 0; i < 16; i++) this.spawn(e.pos, rnd(-120, 120), rnd(-180, -20), rnd(0.3, 0.7), rnd(2, 4), PAL.ember, "spark");
           break;
         case "bulletWall":
-          for (let i = 0; i < 5; i++) this.spawn(e.pos, rnd(-140, 140), rnd(-140, 140), rnd(0.1, 0.3), rnd(1.5, 3), PAL.emberHot, "spark");
+          this.spark(e.pos, 4);
           break;
         case "shieldBlock":
           for (let i = 0; i < 8; i++) this.spawn(e.pos, rnd(-200, 200), rnd(-200, 200), rnd(0.1, 0.3), rnd(1.5, 3), 0xf4e2a8, "spark");
@@ -512,6 +520,7 @@ export class GameRenderer {
     if (this.grain) this.grain.seed = Math.random(); // the grain crawls
     this.frameDt = dt;
     this.updateParticles(dt);
+    this.spawnDust(world, dt);
     for (const [id, tt] of this.telegraphs) {
       if (tt - dt <= 0) this.telegraphs.delete(id);
       else this.telegraphs.set(id, tt - dt);
@@ -620,6 +629,7 @@ export class GameRenderer {
       const alive = new Set(world.units.map((u) => u.id));
       for (const id of this.motion.keys()) if (id !== -1 && !alive.has(id)) this.motion.delete(id);
     }
+    this.drawLights(world, "flames", actors);
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
     if (this.rope) {
@@ -775,16 +785,31 @@ export class GameRenderer {
   }
 
   // ---------------------------------------------------------------- lights and darkness
-  /** Flames glow above the darkness. */
-  private drawLights(world: World): void {
+  /**
+   * Flames glow above the darkness. The "glow" pass draws the halos (and the flames that hang
+   * above everything: chandeliers, street lamps) on the glow layer; the "flames" pass hands the
+   * standing flames to drawActors, so they sort by y with the player and the units.
+   */
+  private drawLights(world: World, pass: "glow" | "flames" = "glow", out?: { y: number; draw: () => void }[]): void {
+    const glow = pass === "glow";
     const g = this.glowG;
+    let hanging = false;
+    let baseY = 0;
     const flame = (x: number, y: number, size: number, flick: number, color: number = PAL.emberHot) => {
-      g.circle(x, y - 4 * size, 12 * size).fill({ color: PAL.ember, alpha: 0.22 });
-      g.poly([x - 4 * size, y, x, y - 14 * size - flick, x + 4 * size, y]).fill(color);
+      if (glow) g.circle(x, y - 4 * size, 12 * size).fill({ color: PAL.ember, alpha: 0.22 });
+      const pts = [x - 4 * size, y, x, y - 14 * size - flick, x + 4 * size, y];
+      if (hanging) {
+        if (glow) g.poly(pts).fill(color);
+      } else if (!glow) {
+        out?.push({ y: baseY, draw: () => this.actorsG.poly(pts).fill(color) });
+      }
     };
     for (const l of world.lights) {
       if (l.kind === "flash" || !l.on) continue;
-      const flick = Math.sin(world.time * 13 + l.id * 3) * 1.5;
+      hanging = l.kind === "chandelier" || l.kind === "streetlamp";
+      if (!glow && (hanging || l.kind === "window" || l.kind === "lantern" || l.kind === "censer")) continue;
+      baseY = l.pos.y;
+      const flick = flickN(world.time, l.id) * 1.5;
       const { x, y } = l.pos;
       switch (l.kind) {
         case "candle":
@@ -798,7 +823,7 @@ export class GameRenderer {
           break;
         case "torch": {
           const h = World.hitPoint(l);
-          g.circle(h.x, h.y - 10, 26).fill({ color: PAL.ember, alpha: 0.18 });
+          if (glow) g.circle(h.x, h.y - 10, 26).fill({ color: PAL.ember, alpha: 0.18 });
           flame(h.x - 3, h.y - 2, 1.5, flick * 2);
           flame(h.x + 4, h.y - 1, 1.1, -flick * 2);
           break;
@@ -808,11 +833,11 @@ export class GameRenderer {
           flame(x, y - 68, 1, flick);
           break;
         case "brazier":
-          g.circle(x, y - 34, 30).fill({ color: PAL.ember, alpha: 0.2 });
+          if (glow) g.circle(x, y - 34, 30).fill({ color: PAL.ember, alpha: 0.2 });
           for (let i = 0; i < (l.hp < l.maxHp ? 2 : 4); i++) flame(x - 15 + i * 10, y - 26, 1.4, flick * (i % 2 ? -2 : 2));
           break;
         case "pyre": {
-          g.circle(x, y - 50, 70).fill({ color: PAL.holy, alpha: 0.14 });
+          if (glow) g.circle(x, y - 50, 70).fill({ color: PAL.holy, alpha: 0.14 });
           const n = 3 + l.hp * 2;
           for (let i = 0; i < n; i++) flame(x - 40 + (80 * i) / Math.max(1, n - 1), y - 18 - (i % 2) * 14, 2.4, flick * (i % 2 ? -3 : 3), i % 2 ? 0xfff0c0 : PAL.emberHot);
           break;
@@ -856,35 +881,79 @@ export class GameRenderer {
     }
   }
 
-  /** The room in darkness: black everywhere except hard-edged pools of light. */
+  /**
+   * The room in darkness, with soft-cored pools of light and a warm glow. Visual only: who is
+   * hidden is decided by World.lightAt, so the pool keeps a visible rim exactly at l.radius,
+   * where the warm colour (and the light that lets enemies see you) begins.
+   */
   private drawDarkness(world: World): void {
     this.darkSprite.visible = world.dark;
     if (!world.dark) return;
-    const ctx = this.darkCanvas.getContext("2d");
+    // the first getContext on this canvas decides: keep it on the CPU (no GPU read-back per upload)
+    const ctx = this.darkCanvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
     const ox = this.camLayer.position.x;
     const oy = this.camLayer.position.y;
     const k = 0.5; // the canvas is half resolution
+    const veil = world.theme === "cmentarz" ? 0.74 : 0.82;
     ctx.globalCompositeOperation = "source-over";
     ctx.clearRect(0, 0, this.darkCanvas.width, this.darkCanvas.height);
-    ctx.fillStyle = "rgba(6, 4, 3, 0.9)";
+    ctx.fillStyle = `rgba(8, 7, 14, ${veil})`;
     ctx.fillRect(0, 0, this.darkCanvas.width, this.darkCanvas.height);
     ctx.globalCompositeOperation = "destination-out";
-    const hole = (x: number, y: number, r: number, a: number) => {
-      ctx.fillStyle = `rgba(0,0,0,${a})`;
+    const lit = world.lights.filter((l) => l.on);
+    for (const l of lit) {
+      // a pool: full light in the core, a soft step to the outer band (World.lightAt: 0.7 r),
+      // and a clear edge at the radius itself, never beyond it
+      const cx = (l.pos.x + ox) * k;
+      const cy = (l.pos.y + oy) * k;
+      const R = Math.max(1, l.radius) * k;
+      const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      gr.addColorStop(0, "rgba(0,0,0,1)");
+      gr.addColorStop(0.6, "rgba(0,0,0,1)");
+      gr.addColorStop(0.72, "rgba(0,0,0,0.82)");
+      gr.addColorStop(0.97, "rgba(0,0,0,0.66)");
+      gr.addColorStop(1, "rgba(0,0,0,0.5)");
+      ctx.fillStyle = gr;
       ctx.beginPath();
-      ctx.arc((x + ox) * k, (y + oy) * k, Math.max(0, r) * k, 0, Math.PI * 2);
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fill();
-    };
-    for (const l of world.lights) {
-      if (!l.on) continue;
-      const flick = l.kind === "window" || l.kind === "flash" ? 1 : 1 + Math.sin(world.time * 9 + l.id) * 0.02;
-      hole(l.pos.x, l.pos.y, l.radius * flick, 0.72); // outer band
-      hole(l.pos.x, l.pos.y, l.radius * 0.7 * flick, 1); // hard bright core
     }
     // the necromancer can always make out his own silhouette, faintly
-    if (world.player.alive) hole(world.player.pos.x, world.player.pos.y - 30, 70, 0.4);
+    if (world.player.alive) {
+      const cx = (world.player.pos.x + ox) * k;
+      const cy = (world.player.pos.y - 30 + oy) * k;
+      const R = 110 * k;
+      const gr = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R);
+      gr.addColorStop(0, "rgba(0,0,0,0.45)");
+      gr.addColorStop(0.55, "rgba(0,0,0,0.38)");
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = gr;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    }
     ctx.globalCompositeOperation = "source-over";
+    // warm light: orange from flames, whitish from windows; it breathes with the flame but stops
+    // at the radius, where a thin warm rim marks the edge of being seen
+    for (const l of lit) {
+      if (l.kind === "flash") continue;
+      const f = l.kind === "window" ? 0 : flickN(world.time, l.id);
+      const warm = l.kind === "window" ? "255,240,200" : "255,150,60";
+      const peak = (l.kind === "window" ? 0.08 : 0.14) * (1 + f * 0.25);
+      const cx = (l.pos.x + ox) * k;
+      const cy = (l.pos.y + oy) * k;
+      const R = Math.max(1, l.radius) * k;
+      const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      gr.addColorStop(0, `rgba(${warm},${peak})`);
+      gr.addColorStop(0.6, `rgba(${warm},${peak * 0.43})`);
+      gr.addColorStop(1, `rgba(${warm},${peak * 0.3})`);
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${warm},0.22)`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
     if (this.flashWhite > 0) {
       ctx.fillStyle = `rgba(255,245,220,${Math.min(0.6, this.flashWhite)})`;
       ctx.fillRect(0, 0, this.darkCanvas.width, this.darkCanvas.height);
@@ -957,6 +1026,28 @@ export class GameRenderer {
     this.particles.push({ x: p.x, y: p.y, vx, vy, life, max: life, size, color, kind });
   }
 
+  /** A hit: a burst of hot sparks and a short flash. */
+  private spark(pos: Vec, n: number): void {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = rnd(180, 420);
+      this.spawn(pos, Math.cos(a) * s, Math.sin(a) * s, rnd(0.12, 0.25), rnd(2.5, 4.5), PAL.emberHot, "spark");
+    }
+    this.spawn(pos, 0, 0, 0.06, 14, PAL.emberHot, "flash");
+  }
+
+  /** Dust motes drifting up inside the pools of light (at most 60 in a room). */
+  private spawnDust(world: World, dt: number): void {
+    if (!this.dust || !world.dark || this.dustCount >= 60) return;
+    for (const l of world.lights) {
+      if (!l.on || l.kind === "flash" || Math.random() > 0.6 * dt || this.dustCount >= 60) continue;
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * l.radius * 0.8;
+      this.spawn({ x: l.pos.x + Math.cos(a) * r, y: l.pos.y + Math.sin(a) * r }, rnd(-8, 8), rnd(-14, -4), rnd(3, 6), rnd(1.2, 2.2), PAL.wax, "dust");
+      this.dustCount++;
+    }
+  }
+
   private puff(pos: Vec, dir: Vec, n: number): void {
     for (let i = 0; i < n; i++) this.spawn(pos, dir.x * rnd(40, 160) + rnd(-40, 40), dir.y * rnd(40, 160) + rnd(-40, 40) - 20, rnd(0.5, 1.1), rnd(8, 18), PAL.smoke, "smoke");
     for (let i = 0; i < 6; i++) this.spawn(pos, dir.x * rnd(200, 500) + rnd(-80, 80), dir.y * rnd(200, 500) + rnd(-80, 80), rnd(0.08, 0.2), rnd(2, 4), PAL.emberHot, "spark");
@@ -975,11 +1066,13 @@ export class GameRenderer {
 
   private updateParticles(dt: number): void {
     const alive: Particle[] = [];
+    let dust = 0;
     for (const q of this.particles) {
+      if (q.kind === "dust" && q.life > dt) dust++;
       q.life -= dt;
       q.x += q.vx * dt;
       q.y += q.vy * dt;
-      const drag = q.kind === "smoke" || q.kind === "mist" || q.kind === "ash" ? 2.5 : q.kind === "glass" ? 1.5 : 5;
+      const drag = q.kind === "dust" ? 0 : q.kind === "smoke" || q.kind === "mist" || q.kind === "ash" ? 2.5 : q.kind === "glass" ? 1.5 : 5;
       q.vx *= Math.max(0, 1 - dt * drag);
       q.vy *= Math.max(0, 1 - dt * drag);
       if (q.kind === "smoke") q.size += dt * 22;
@@ -995,6 +1088,7 @@ export class GameRenderer {
       }
     }
     this.particles = alive;
+    this.dustCount = dust;
   }
 
   private drawParticles(): void {
@@ -1015,6 +1109,15 @@ export class GameRenderer {
         case "ash":
           g.rect(q.x, q.y, q.size, q.size * 0.6).fill({ color: q.color, alpha: a });
           break;
+        case "flash":
+          g.circle(q.x, q.y, q.size * (1.4 - 0.4 * a)).fill({ color: PAL.ember, alpha: 0.35 * a });
+          g.circle(q.x, q.y, q.size * 0.5).fill({ color: 0xfff0c0, alpha: a });
+          break;
+        case "dust": {
+          const s = Math.sin(Math.PI * (1 - a));
+          g.circle(q.x, q.y, q.size).fill({ color: q.color, alpha: 0.35 * s });
+          break;
+        }
         default:
           g.circle(q.x, q.y, q.size * (0.6 + 0.4 * a)).fill(q.color);
       }
@@ -1051,6 +1154,11 @@ function drawBullet(g: Graphics, b: Bullet, time: number): void {
   const dx = b.vel.x / sp;
   const dy = b.vel.y / sp;
   const mine = b.side === "minion";
+  // the player's shots leave a short hot streak, easy to follow in the dark
+  if (b.fromPlayer && !b.lob) {
+    g.moveTo(x - dx * 34, y - dy * 34).lineTo(x, y).stroke({ width: r * 1.2, color: PAL.playerBullet, alpha: 0.35, cap: "round" });
+    g.moveTo(x - dx * 16, y - dy * 16).lineTo(x, y).stroke({ width: Math.max(2, r * 0.6), color: 0xfff0c0, alpha: 0.7, cap: "round" });
+  }
   switch (b.look) {
     case "bolt":
       g.moveTo(x - dx * 18, y - dy * 18).lineTo(x + dx * 6, y + dy * 6).stroke({ width: 4, color: PAL.ink, cap: "round" });
