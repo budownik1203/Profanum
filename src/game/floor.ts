@@ -1,12 +1,19 @@
 /**
- * One floor of a run: rooms on a grid, connected by doors.
- * Rooms are built lazily the first time the necromancer walks in and keep their state
+ * One floor of a run: rooms on a grid, connected by doors (one of them hidden: the way down to the
+ * catacombs). Rooms are built the first time the necromancer walks in and keep their state
  * (blood, corpses, cleared or not) after he leaves. The player and his minions walk with him.
  */
 import { CONFIG } from "./config.js";
 import { makeRng, type Vec, vec } from "./math.js";
-import { COMBAT_LAYOUTS, type RoomType, applyBoss, applyLayout, applyStart, applyTreasure } from "./rooms.js";
-import { type GameEvent, type InputState, type Player, type Side, World } from "./world.js";
+import { FLOORS, floorDef } from "./data/floors.js";
+import { WEAPONS } from "./data/weapons.js";
+import {
+  TEMPLATES, type RoomType, applyAltar, applySecret, applyShop, applyStart, applyTemplate, applyTreasure, roomSize, templateByName,
+} from "./rooms.js";
+import { setupBossArena } from "./bosses.js";
+import type { GameEvent, InputState, Player, Side } from "./types.js";
+import { World } from "./world.js";
+import { pick } from "./shared.js";
 
 export interface RoomNode {
   id: number;
@@ -16,10 +23,27 @@ export interface RoomNode {
   /** Steps from the start room. */
   depth: number;
   doors: Partial<Record<Side, number>>;
-  /** Layout name for combat rooms. */
+  /** Doors hidden behind a cracked wall (the catacombs). */
+  secretDoors: Partial<Record<Side, true>>;
+  /** Template name for combat rooms. */
   layout?: string;
+  mirror: boolean;
   world: World | null;
   visited: boolean;
+  /** A bell or a curse warned this room: it starts with the alarm. */
+  alarmed: boolean;
+  /** The catacombs: not on the map until found. */
+  hidden: boolean;
+}
+
+export interface FloorOptions {
+  /** Floor number: 1 cemetery ... 5 cathedral, 6 the sanctum of the Holy Flame. */
+  depth: number;
+  /** The necromancer coming down from the floor above (a fresh one is made otherwise). */
+  player?: Player;
+  pool?: string[];
+  grace?: boolean;
+  roomCount?: number;
 }
 
 const DIRS: Record<Side, [number, number]> = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] };
@@ -32,15 +56,26 @@ export class Floor {
   player: Player;
   cleared = false;
   readonly seed: number;
+  readonly depth: number;
+  /** The saint's finger showed the whole floor. */
+  revealed = false;
   private rng: () => number;
+  private opts: FloorOptions;
 
-  constructor(seed = Math.floor(Math.random() * 1e9), roomCount = 8) {
+  constructor(seed = Math.floor(Math.random() * 1e9), options: Partial<FloorOptions> = {}) {
     this.seed = seed;
+    this.opts = { depth: 1, ...options };
+    this.depth = this.opts.depth;
     this.rng = makeRng(seed);
-    this.generate(roomCount);
+    if (this.depth >= 6) this.generateSanctum();
+    else this.generate(this.opts.roomCount ?? floorDef(this.depth).rooms);
     const start = this.rooms[0];
     start.world = this.build(start);
     start.visited = true;
+    if (this.opts.player) {
+      start.world.player = this.opts.player;
+      this.opts.player.pos = vec(start.world.room.w / 2, start.world.room.h * 0.7);
+    }
     this.player = start.world.player;
   }
 
@@ -54,15 +89,23 @@ export class Floor {
     return this.rooms[this.current];
   }
 
-  /** Rooms the minimap may show: visited ones and their direct neighbours. */
+  /** Rooms the minimap may show: visited ones and their direct neighbours (all, after the finger). */
   known(): RoomNode[] {
+    if (this.revealed) return this.rooms;
     const ids = new Set<number>();
     for (const r of this.rooms) {
       if (!r.visited) continue;
       ids.add(r.id);
-      for (const to of Object.values(r.doors)) if (to !== undefined) ids.add(to);
+      for (const [side, to] of Object.entries(r.doors) as [Side, number][]) {
+        if (r.secretDoors[side] && !this.secretOpen(r, side)) continue;
+        ids.add(to);
+      }
     }
     return this.rooms.filter((r) => ids.has(r.id));
+  }
+
+  private secretOpen(r: RoomNode, side: Side): boolean {
+    return !!r.world?.interactables.some((i) => i.kind === "secret" && i.side === side && i.used);
   }
 
   // ---------------------------------------------------------------- generation
@@ -70,7 +113,7 @@ export class Floor {
     const at = new Map<string, RoomNode>();
     const key = (x: number, y: number) => `${x},${y}`;
     const add = (gx: number, gy: number): RoomNode => {
-      const r: RoomNode = { id: this.rooms.length, gx, gy, type: "combat", depth: 0, doors: {}, world: null, visited: false };
+      const r: RoomNode = { id: this.rooms.length, gx, gy, type: "combat", depth: 0, doors: {}, secretDoors: {}, world: null, visited: false, mirror: this.rng() < 0.5, alarmed: false, hidden: false };
       this.rooms.push(r);
       at.set(key(gx, gy), r);
       return r;
@@ -82,13 +125,15 @@ export class Floor {
 
     add(0, 0);
     let guard = 0;
-    while (this.rooms.length < count && guard++ < 1000) {
+    while (this.rooms.length < count && guard++ < 2000) {
       const from = this.rooms[Math.floor(this.rng() * this.rooms.length)];
+      // grow mostly from rooms with few doors: longer corridors, more dead ends
+      if (Object.keys(from.doors).length >= 3 && this.rng() < 0.7) continue;
       const side = SIDES[Math.floor(this.rng() * 4)];
       const [dx, dy] = DIRS[side];
       const gx = from.gx + dx;
       const gy = from.gy + dy;
-      if (Math.abs(gx) > 3 || Math.abs(gy) > 3 || at.has(key(gx, gy))) continue;
+      if (Math.abs(gx) > 4 || Math.abs(gy) > 4 || at.has(key(gx, gy))) continue;
       link(from, add(gx, gy), side);
     }
     // one extra loop now and then, so the floor is not a pure tree
@@ -101,8 +146,65 @@ export class Floor {
         }
       }
     }
+    this.computeDepths();
 
-    // depth by breadth-first search from the start
+    // start, boss (deepest), then the special rooms on dead ends where possible
+    this.rooms[0].type = "start";
+    const others = this.rooms.slice(1);
+    const maxDepth = Math.max(...others.map((r) => r.depth));
+    const deepest = others.filter((r) => r.depth === maxDepth);
+    pick(this.rng, deepest).type = "boss";
+    const free = () => this.rooms.filter((r) => r.type === "combat");
+    const deadEnds = () => free().filter((r) => Object.keys(r.doors).length === 1);
+    const place = (type: RoomType, minDepth: number, preferDeadEnd: boolean) => {
+      const de = deadEnds().filter((r) => r.depth >= minDepth);
+      const pool = preferDeadEnd && de.length ? de : free().filter((r) => r.depth >= minDepth);
+      const list = pool.length ? pool : free();
+      if (list.length) pick(this.rng, list).type = type;
+    };
+    place("treasure", 1, true);
+    place("shop", 2, true);
+    place("altar", 1, true);
+    if (this.depth >= 3) place("treasure", 2, true);
+    place("miniboss", 2, false);
+    for (const r of this.rooms) {
+      if (r.type === "combat" || r.type === "miniboss") r.layout = pick(this.rng, TEMPLATES).name;
+    }
+    this.addSecretRoom(at, key);
+  }
+
+  /** The catacombs: a hidden room next to an ordinary one, behind a cracked wall. */
+  private addSecretRoom(at: Map<string, RoomNode>, key: (x: number, y: number) => string): void {
+    const hosts = this.rooms.filter((r) => r.type === "combat" || r.type === "treasure" || r.type === "altar");
+    const options: [RoomNode, Side][] = [];
+    for (const r of hosts) {
+      for (const s of SIDES) {
+        const [dx, dy] = DIRS[s];
+        if (r.doors[s] === undefined && !at.has(key(r.gx + dx, r.gy + dy))) options.push([r, s]);
+      }
+    }
+    if (!options.length) return;
+    const [host, side] = pick(this.rng, options);
+    const [dx, dy] = DIRS[side];
+    const s: RoomNode = { id: this.rooms.length, gx: host.gx + dx, gy: host.gy + dy, type: "secret", depth: host.depth + 1, doors: {}, secretDoors: {}, world: null, visited: false, mirror: false, alarmed: false, hidden: true };
+    this.rooms.push(s);
+    at.set(key(s.gx, s.gy), s);
+    host.doors[side] = s.id;
+    host.secretDoors[side] = true;
+    s.doors[OPPOSITE[side]] = host.id;
+  }
+
+  /** The last floor: an antechamber and the sanctum of the Holy Flame. */
+  private generateSanctum(): void {
+    const mk = (id: number, gy: number, type: RoomType): RoomNode => ({ id, gx: 0, gy, type, depth: id, doors: {}, secretDoors: {}, world: null, visited: false, mirror: false, alarmed: false, hidden: false });
+    const a = mk(0, 0, "start");
+    const b = mk(1, -1, "final");
+    a.doors.N = 1;
+    b.doors.S = 0;
+    this.rooms.push(a, b);
+  }
+
+  private computeDepths(): void {
     const depth = new Map<number, number>([[0, 0]]);
     const queue = [0];
     while (queue.length) {
@@ -114,40 +216,82 @@ export class Floor {
       }
     }
     for (const r of this.rooms) r.depth = depth.get(r.id) ?? 0;
-
-    // start, boss (deepest), treasure (a dead end if possible), the rest are combat rooms
-    this.rooms[0].type = "start";
-    const others = this.rooms.slice(1);
-    const maxDepth = Math.max(...others.map((r) => r.depth));
-    const deepest = others.filter((r) => r.depth === maxDepth);
-    const boss = deepest[Math.floor(this.rng() * deepest.length)];
-    boss.type = "boss";
-    const rest = others.filter((r) => r !== boss);
-    const deadEnds = rest.filter((r) => Object.keys(r.doors).length === 1);
-    const pool = deadEnds.length ? deadEnds : rest;
-    pool[Math.floor(this.rng() * pool.length)].type = "treasure";
-    for (const r of this.rooms) {
-      if (r.type === "combat") r.layout = COMBAT_LAYOUTS[Math.floor(this.rng() * COMBAT_LAYOUTS.length)].name;
-    }
   }
 
   /** Build the room's World the first time it is entered. */
   private build(node: RoomNode): World {
-    const w = new World(makeRng(this.seed + node.id * 7919));
-    if (node.type === "start") applyStart(w);
-    else if (node.type === "treasure") applyTreasure(w);
-    else if (node.type === "boss") applyBoss(w);
-    else {
-      const layout = COMBAT_LAYOUTS.find((l) => l.name === node.layout) ?? COMBAT_LAYOUTS[0];
-      applyLayout(w, layout, Math.min(layout.guards.length, 2 + node.depth));
+    const rng = makeRng(this.seed + node.id * 7919);
+    const template = node.layout ? templateByName(node.layout) : undefined;
+    const w = new World(rng, roomSize(node.type, template));
+    w.roomType = node.type;
+    w.ctx = {
+      depth: this.depth,
+      grace: this.opts.grace ?? false,
+      pool: this.opts.pool,
+      alarmNeighbours: () => this.alarmNeighbours(node.id),
+    };
+    if (this.rooms[0].world || this.opts.player) w.player = this.player ?? this.opts.player!;
+    const def = floorDef(this.depth);
+    switch (node.type) {
+      case "start":
+        applyStart(w, Math.min(this.depth, FLOORS.length));
+        if (this.depth >= 6) w.theme = "sanktuarium";
+        break;
+      case "treasure":
+        applyTreasure(w, this.depth, rng);
+        break;
+      case "shop":
+        applyShop(w, this.depth);
+        break;
+      case "altar":
+        applyAltar(w, this.depth);
+        break;
+      case "secret":
+        applySecret(w, this.depth, (this.depth - 1) * 2 + Math.floor(rng() * 2));
+        break;
+      case "boss":
+        setupBossArena(w, def.boss, this.depth, rng);
+        break;
+      case "final":
+        setupBossArena(w, "holyflame", 6, rng);
+        break;
+      default: {
+        const t = template!;
+        const guards = Math.min(t.slots.length, 3 + def.extra + Math.floor(node.depth / 2));
+        applyTemplate(w, t, this.depth, guards, rng, { elite: node.type === "miniboss", mirror: node.mirror });
+      }
     }
     for (const side of SIDES) {
       const to = node.doors[side];
-      if (to !== undefined) w.addDoor(side, to);
+      if (to === undefined) continue;
+      const secret = !!node.secretDoors[side];
+      w.addDoor(side, to, secret);
+      if (secret) {
+        const c = w.doorCenter(side);
+        w.addInteractable("secret", c, { hidden: true, hp: 3, side, radius: 90 });
+      }
     }
     keepDoorwaysClear(w);
-    if (this.rooms[0].world) w.player = this.player;
+    if (node.alarmed || this.cursedAlarm()) alertAll(w);
     return w;
+  }
+
+  /** Saint Gervase's barrel: the priests sense its bearer, every room starts alarmed. */
+  private cursedAlarm(): boolean {
+    const p = this.player ?? this.opts.player;
+    return !!p && p.weapons.some((s) => WEAPONS[s.id].curse === "alarm");
+  }
+
+  /** A bell (or a cursed gun) warns the neighbouring rooms: they wait ready for the fight. */
+  alarmNeighbours(id: number): void {
+    const node = this.rooms[id];
+    for (const [side, to] of Object.entries(node.doors) as [Side, number][]) {
+      if (node.secretDoors[side]) continue;
+      const n = this.rooms[to];
+      if (n.type === "start" || n.type === "boss" || n.type === "final") continue;
+      n.alarmed = true;
+      if (n.world && !n.world.cleared) alertAll(n.world);
+    }
   }
 
   // ---------------------------------------------------------------- play
@@ -157,7 +301,14 @@ export class Floor {
     const events = [...w.events];
     const exit = events.find((e) => e.type === "exit");
     if (exit && exit.type === "exit") events.push(...this.travel(exit.door.side, exit.door.to));
-    if (!this.cleared && this.node.type === "boss" && w.cleared) {
+    if (events.some((e) => e.type === "relicUse" && e.relic === "finger")) {
+      this.revealed = true;
+      for (const r of this.rooms) r.hidden = false;
+    }
+    if (events.some((e) => e.type === "secretOpen")) {
+      for (const r of this.rooms) if (r.type === "secret") r.hidden = false;
+    }
+    if (!this.cleared && (this.node.type === "boss" || this.node.type === "final") && w.cleared && w.hadEnemies) {
       this.cleared = true;
       events.push({ type: "floorCleared" });
     }
@@ -165,7 +316,7 @@ export class Floor {
   }
 
   /** Walk through a door: the minions follow, the new room is built if needed. */
-  private travel(side: Side, to: number): GameEvent[] {
+  travel(side: Side, to: number): GameEvent[] {
     const from = this.world;
     const node = this.rooms[to];
     if (!node.world) node.world = this.build(node);
@@ -181,14 +332,34 @@ export class Floor {
     minions.forEach((m, i) => {
       m.pos = spreadAround(at, i, arriveSide);
       m.push = vec();
-      m.state = m.kind === "halberdier" ? "follow" : "reposition";
+      m.state = m.def.ai === "gunner" || m.def.ai === "caster" || m.def.ai === "bomber" || m.def.ai === "censer" ? "reposition" : "follow";
       w.units.push(m);
     });
+    // lights carried by minions move with them
+    for (const l of from.lights.filter((x) => x.owner !== undefined && minions.some((m) => m.id === x.owner))) {
+      from.lights = from.lights.filter((x) => x !== l);
+      w.lights.push(l);
+    }
     w.order = null;
     w.events = [];
+    if (node.alarmed && !w.alarm && !w.cleared) alertAll(w);
     this.current = to;
     node.visited = true;
+    node.hidden = false;
     return [{ type: "enterRoom", room: to, side: arriveSide }];
+  }
+}
+
+/** Everyone in the room is already up and ready (doors shut the moment you walk in). */
+function alertAll(w: World): void {
+  w.alarm = true;
+  for (const u of w.units) {
+    if (u.team === "minion") continue;
+    if (u.state === "idle" || u.state === "patrol") {
+      const ranged = u.def.ai === "gunner" || u.def.ai === "caster" || u.def.ai === "bomber" || u.def.ai === "censer";
+      u.state = ranged ? "reposition" : "approach";
+      u.timer = ranged ? 0.4 + w.rng() * 0.8 : 0;
+    }
   }
 }
 
@@ -204,12 +375,13 @@ function spreadAround(at: Vec, i: number, side: Side): Vec {
 
 /**
  * Keep pews out of doorways, guards out of the arrival zone and light off the threshold,
- * whatever the layout says: every door opens into a pocket of shadow to start the fight from.
+ * whatever the template says: every door opens into a pocket of shadow to start the fight from.
  */
-function keepDoorwaysClear(w: World): void {
+export function keepDoorwaysClear(w: World): void {
   const zones = w.doors.map((d) => w.doorCenter(d.side));
   const nearDoor = (p: Vec, r: number) => zones.some((z) => Math.hypot(p.x - z.x, p.y - z.y) < r);
   w.covers = w.covers.filter((c) => !nearDoor({ x: c.x + c.w / 2, y: c.y + c.h / 2 }, 260));
+  w.chests = w.chests.filter((c) => !nearDoor(c.pos, 200));
   const arrivals = w.doors.map((d) => w.arrivalPoint(d.side));
   const shadow = CONFIG.darkness.doorShadow;
   for (const l of w.lights) {
@@ -221,18 +393,18 @@ function keepDoorwaysClear(w: World): void {
   }
   // a light squeezed this small is not worth keeping
   w.lights = w.lights.filter((l) => l.owner !== undefined || l.radius >= 90);
+  const cx = w.room.w / 2;
+  const cy = w.room.h / 2;
   for (const u of w.units) {
-    if (u.team !== "enemy") continue;
+    if (u.team === "minion" || u.def.boss) continue;
     for (const z of zones) {
       const dx = u.pos.x - z.x;
       const dy = u.pos.y - z.y;
       const d = Math.hypot(dx, dy);
       // lantern-bearers stay farther off, so their light doesn't spill onto the threshold
-      const min = u.lantern ? 420 : 360;
+      const min = u.lantern ? 420 + (u.def.lightRadius ?? 150) - 150 : 360;
       if (d < min) {
         // push the guard deeper into the room, away from the doorway
-        const cx = CONFIG.room.width / 2;
-        const cy = CONFIG.room.height / 2;
         const tx = cx - z.x;
         const ty = cy - z.y;
         const tl = Math.hypot(tx, ty) || 1;

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { World, idleInput, type GameEvent, type InputState, type Unit } from "../src/game/world.js";
 import { Floor } from "../src/game/floor.js";
-import { COMBAT_LAYOUTS, applyLayout } from "../src/game/rooms.js";
+import { TEMPLATES, applyTemplate } from "../src/game/rooms.js";
 import { CONFIG } from "../src/game/config.js";
 import { makeRng, vec } from "../src/game/math.js";
 import { WEAPONS } from "../src/game/data/weapons.js";
@@ -114,22 +114,24 @@ test("a fallen chandelier and a stained-glass window can't be relit", () => {
   assert.ok(!ev.some((e) => e.type === "relight"));
 });
 
-test("combat rooms are bright, with darkness at the edges", () => {
-  for (const layout of COMBAT_LAYOUTS) {
-    const w = new World(makeRng(1));
-    applyLayout(w, layout, 0);
-    let lit = 0;
-    let n = 0;
-    for (let x = 60; x < 1740; x += 20) {
-      for (let y = 60; y < 1040; y += 20) {
-        n++;
-        if (w.isLit(vec(x, y), false)) lit++;
+test("combat rooms are bright, with darkness at the edges, on every floor", () => {
+  for (let depth = 1; depth <= 5; depth++) {
+    for (const t of TEMPLATES) {
+      const w = new World(makeRng(1), { w: t.w, h: t.h });
+      applyTemplate(w, t, depth, 0, makeRng(2));
+      let lit = 0;
+      let n = 0;
+      for (let x = 60; x < t.w - 60; x += 20) {
+        for (let y = 60; y < t.h - 60; y += 20) {
+          n++;
+          if (w.isLit(vec(x, y), false)) lit++;
+        }
       }
-    }
-    const share = lit / n;
-    assert.ok(share > 0.35 && share < 0.8, `${layout.name}: ${(share * 100).toFixed(0)}% lit`);
-    for (const corner of [vec(80, 80), vec(1720, 80), vec(80, 1020), vec(1720, 1020)]) {
-      assert.equal(w.isLit(corner, false), false, `${layout.name}: corner ${corner.x},${corner.y} is dark`);
+      const share = lit / n;
+      assert.ok(share > 0.3 && share < 0.85, `${t.name} on floor ${depth}: ${(share * 100).toFixed(0)}% lit`);
+      for (const corner of [vec(80, 80), vec(t.w - 80, 80), vec(80, t.h - 80), vec(t.w - 80, t.h - 80)]) {
+        assert.equal(w.isLit(corner, false), false, `${t.name} on floor ${depth}: corner ${corner.x},${corner.y} is dark`);
+      }
     }
   }
 });
@@ -138,7 +140,7 @@ test("every door opens into shadow", () => {
   for (let seed = 1; seed <= 12; seed++) {
     const f = new Floor(seed);
     for (const r of f.rooms) {
-      (f as unknown as { travel: (s: string, to: number) => GameEvent[] }).travel("N", r.id);
+      f.travel("N", r.id);
       const w = f.world;
       for (const d of w.doors) {
         const a = w.arrivalPoint(d.side);

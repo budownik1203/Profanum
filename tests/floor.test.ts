@@ -30,22 +30,36 @@ function walkOut(f: Floor, side: Side): GameEvent[] {
   return all;
 }
 
-test("a floor has 8 connected rooms: one start, one treasure, one boss", () => {
+test("a floor has its start, boss, special rooms and a hidden catacomb, all connected", () => {
   for (let seed = 1; seed <= 20; seed++) {
-    const f = new Floor(seed);
-    assert.equal(f.rooms.length, 8);
-    assert.equal(f.rooms.filter((r) => r.type === "start").length, 1);
-    assert.equal(f.rooms.filter((r) => r.type === "boss").length, 1);
-    assert.equal(f.rooms.filter((r) => r.type === "treasure").length, 1);
-    for (const r of f.rooms) {
-      assert.ok(r.id === 0 || r.depth > 0, "every room is reachable");
-      for (const [side, to] of Object.entries(r.doors) as [Side, number][]) {
-        assert.equal(f.rooms[to].doors[OPPOSITE[side]], r.id, "doors are two-way");
+    for (const depth of [1, 3, 5]) {
+      const f = new Floor(seed, { depth });
+      const count = (t: string) => f.rooms.filter((r) => r.type === t).length;
+      assert.equal(count("start"), 1);
+      assert.equal(count("boss"), 1);
+      assert.ok(count("treasure") >= 1);
+      assert.equal(count("shop"), 1);
+      assert.equal(count("altar"), 1);
+      assert.equal(count("miniboss"), 1);
+      assert.ok(count("secret") <= 1);
+      assert.ok(f.rooms.filter((r) => r.type !== "secret").length >= 10);
+      for (const r of f.rooms) {
+        assert.ok(r.id === 0 || r.depth > 0, "every room is reachable");
+        for (const [side, to] of Object.entries(r.doors) as [Side, number][]) {
+          assert.equal(f.rooms[to].doors[OPPOSITE[side]], r.id, "doors are two-way");
+        }
       }
+      const normal = f.rooms.filter((r) => r.type !== "secret");
+      const boss = f.rooms.find((r) => r.type === "boss")!;
+      assert.equal(boss.depth, Math.max(...normal.map((r) => r.depth)), "boss is the deepest room");
     }
-    const boss = f.rooms.find((r) => r.type === "boss")!;
-    assert.equal(boss.depth, Math.max(...f.rooms.map((r) => r.depth)), "boss is the deepest room");
   }
+});
+
+test("the sanctum is an antechamber and the Holy Flame", () => {
+  const f = new Floor(3, { depth: 6 });
+  assert.equal(f.rooms.length, 2);
+  assert.equal(f.rooms[1].type, "final");
 });
 
 test("the same seed builds the same floor", () => {
@@ -125,10 +139,9 @@ test("clearing the boss room finishes the floor", () => {
   const f = new Floor(11);
   const boss = f.rooms.find((r) => r.type === "boss")!;
   // jump straight there for the test
-  (f as unknown as { travel: (s: Side, to: number) => GameEvent[] }).travel("N", boss.id);
+  f.travel("N", boss.id);
   assert.equal(f.node.type, "boss");
-  const elite = f.world.units.find((u) => u.elite);
-  assert.ok(elite, "the Captain of the Guard is there");
+  assert.ok(f.world.units.some((u) => u.def.boss), "the floor's boss is there");
   for (const u of f.world.units) u.alive = false;
   const ev = run(f, idleInput(), DT * 2);
   assert.ok(ev.some((e) => e.type === "floorCleared"));
@@ -140,7 +153,7 @@ test("guards never start right at a doorway", () => {
     const f = new Floor(seed);
     for (const r of f.rooms) {
       if (r.type !== "combat") continue;
-      (f as unknown as { travel: (s: Side, to: number) => GameEvent[] }).travel("N", r.id);
+      f.travel("N", r.id);
       const w = f.world;
       for (const d of w.doors) {
         const c = w.doorCenter(d.side);
