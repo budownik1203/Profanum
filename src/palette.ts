@@ -43,7 +43,9 @@ export const PAL = {
   telegraph: 0xc8321e,
 
   hudText: 0xd8c8a8,
-  hudDim: 0x6a6052,
+  hudDim: 0x979480,
+  /** Switched off / already bought. */
+  hudFaint: 0x787f6b,
   heart: 0x9e1f14,
   heartEmpty: 0x2a1a16,
 } as const;

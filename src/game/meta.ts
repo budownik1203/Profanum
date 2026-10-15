@@ -18,6 +18,8 @@ export interface Settings {
   grace: boolean;
   /** Film grain and colour grading over the arena. */
   film: boolean;
+  /** Full effects (dust in the light); off = low. */
+  fx: boolean;
   lang: "pl" | "en";
 }
 
@@ -97,7 +99,7 @@ export function freshMeta(): Meta {
     selected: "grabarz",
     challenges: [],
     stats: { runs: 0, wins: 0, deaths: 0, kills: 0, raised: 0, deepest: 0, bosses: [] },
-    settings: { shake: 1, volume: 0.8, music: 0.6, numbers: true, grace: false, film: true, lang: "pl" },
+    settings: { shake: 1, volume: 0.8, music: 0.6, numbers: true, grace: false, film: true, fx: true, lang: "pl" },
     skull: 0,
     skullHeard: [],
     codex: freshCodex(),

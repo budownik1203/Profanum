@@ -44,6 +44,9 @@ export function frame(g: Graphics, x: number, y: number, w: number, h: number, a
   }
 }
 
+/** The bottom edge of the minimap and its caption (0 without one), so the pause panels clear it. */
+export let minimapBottom = 0;
+
 export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
   const w = info.world;
   const p = w.player;
@@ -140,7 +143,7 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
       const sy = by - 52;
       g.rect(sx, sy, 52, 40).fill({ color: PAL.ink, alpha: 0.7 }).stroke({ width: 2, color: i === p.current ? PAL.ember : 0x3a302a });
       drawWeaponShape(g, s.id, sx + 8, sy + 22, 0, 0.7);
-      tx.text(String(i + 1), sx + 4, sy + 2, { size: 14, color: i === p.current ? PAL.ember : PAL.hudDim });
+      tx.text(String(i + 1), sx + 4, sy + 2, { size: 16, color: i === p.current ? PAL.ember : PAL.hudDim, stroke: true });
     });
   }
 
@@ -169,9 +172,9 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
     const iy = ry - 46 - Math.floor(i / perRow) * 42;
     g.rect(ix, iy, 36, 36).fill({ color: PAL.ink, alpha: 0.72 }).stroke({ width: 2, color: 0x3a302a });
     drawItemIcon(g, id, ix + 18, iy + 18, 0.75);
-    if (n > 1) tx.text(`×${n}`, ix + 34, iy + 20, { size: 13, color: PAL.hudText, align: "right", stroke: true }, 1, 0);
+    if (n > 1) tx.text(`×${n}`, ix + 34, iy + 20, { size: 16, color: PAL.hudText, align: "right", stroke: true }, 1, 0);
   });
-  if (list.length > perRow * 2) tx.text(`+${list.length - perRow * 2}`, rx + 2, ry - 46 - 2 * 42 + 10, { size: 16, color: PAL.hudDim });
+  if (list.length > perRow * 2) tx.text(`+${list.length - perRow * 2}`, rx + 2, ry - 46 - 2 * 42 + 10, { size: 18, color: PAL.hudDim });
   const minions = boundMinions(w);
   tx.text(`${t("hud.minions")}: ${minions}/${p.stats.minionLimit}`, rx + 22, ry + 82, { size: 22, color: minions > 0 ? PAL.ember : PAL.hudText });
   if (p.character === "wiedzma") {
@@ -180,6 +183,7 @@ export function drawHud(g: Graphics, tx: TextPool, info: HudInfo): void {
   }
 
   // ---------------------------------------------------------------- minimap
+  minimapBottom = 0;
   if (info.floor) drawMinimap(g, tx, info.floor);
   if (info.mode === "hub" && info.echo !== undefined) {
     frame(g, VIEW_W - 344, 20, 320, 60);
@@ -287,5 +291,6 @@ function drawMinimap(g: Graphics, tx: TextPool, floor: Floor): void {
         break;
     }
   }
-  tx.text(t(`floor.${floor.world.theme}`), VIEW_W - 24, oy + hpx + 6, { size: 18, color: PAL.hudDim, align: "right" }, 1, 0);
+  tx.text(t(`floor.${floor.world.theme}`), VIEW_W - 24, oy + hpx + 6, { size: 20, color: PAL.hudText, align: "right", stroke: true }, 1, 0);
+  minimapBottom = oy + hpx + 6 + 22;
 }

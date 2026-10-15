@@ -22,7 +22,7 @@ import { Input } from "./input.js";
 import { Narrator, lineOf, nextSkullLine } from "./narrator.js";
 import { noteText } from "./notes.js";
 import { PAL } from "./palette.js";
-import { drawHud } from "./render/hud.js";
+import { drawHud, minimapBottom } from "./render/hud.js";
 import { GameAudio, type MusicState } from "./audio.js";
 import { drawItemIcon, drawRelicIcon } from "./render/icons.js";
 import { GameRenderer, type Prompt } from "./render/renderer.js";
@@ -68,6 +68,7 @@ async function boot(): Promise<void> {
     setLang(meta.settings.lang);
     audio.setVolumes(meta.settings.volume, meta.settings.music);
     view.setFilm(meta.settings.film);
+    view.dust = meta.settings.fx;
   };
   applySettings();
   const persist = () => saveMeta(store, meta);
@@ -230,6 +231,7 @@ async function boot(): Promise<void> {
       { label: t("opt.music", { v: `${Math.round(s.music * 100)}%` }) },
       { label: t("opt.numbers", { v: onOff(s.numbers) }) },
       { label: t("opt.film", { v: onOff(s.film) }) },
+      { label: t("opt.fx", { v: s.fx ? t("opt.fxFull") : t("opt.fxLow") }) },
       { label: t("opt.grace", { v: onOff(s.grace) }) },
       { label: t("opt.lang") },
       { label: t("opt.back") },
@@ -246,8 +248,9 @@ async function boot(): Promise<void> {
       case 2: s.music = cycle(s.music, [1, 0.6, 0.3, 0]); break;
       case 3: s.numbers = !s.numbers; break;
       case 4: s.film = !s.film; break;
-      case 5: s.grace = !s.grace; break;
-      case 6: s.lang = s.lang === "pl" ? "en" : "pl"; break;
+      case 5: s.fx = !s.fx; break;
+      case 6: s.grace = !s.grace; break;
+      case 7: s.lang = s.lang === "pl" ? "en" : "pl"; break;
       default:
         overlay = overlayBack;
         sel = 0;
@@ -819,8 +822,8 @@ async function boot(): Promise<void> {
     } else if (overlay === "pause") {
       screens.dim(0.5);
       if (mode === "run" && run) {
-        screens.inventory(t("inv.title"), inventorySections(run.player), (n) => t("inv.more", { n }));
-        screens.controls(CONTROLS(), t("legend.title"));
+        screens.inventory(t("inv.title"), inventorySections(run.player), (n) => t("inv.more", { n }), minimapBottom + 16);
+        screens.controls(CONTROLS(), t("legend.title"), 190);
       }
       const m = pauseMenu();
       runMenu(m.items.length, screens.menu(m, mouse), pauseAction);

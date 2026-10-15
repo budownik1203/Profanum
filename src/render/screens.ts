@@ -161,7 +161,7 @@ export class Screens {
       g.circle(x, y, 1.5 + (i % 3)).fill({ color: i % 4 === 0 ? PAL.ember : 0x8a8278, alpha: 0.45 });
     }
     this.tx.text("PROFANUM", VIEW_W / 2, VIEW_H * 0.3, { size: 140, font: "display", color: 0xe8d8b8, align: "center", stroke: true }, 0.5, 0.5);
-    if (menu.subtitle) this.tx.text(menu.subtitle, VIEW_W / 2, VIEW_H * 0.3 + 96, { size: 28, color: PAL.hudDim, align: "center" }, 0.5, 0.5);
+    if (menu.subtitle) this.tx.text(menu.subtitle, VIEW_W / 2, VIEW_H * 0.3 + 96, { size: 28, color: PAL.hudText, align: "center" }, 0.5, 0.5, 0.85);
     return this.items(menu, VIEW_H * 0.56, mouse, false);
   }
 
@@ -234,9 +234,9 @@ export class Screens {
       const ry = y + 120 + i * rowH;
       if (mouse.x > x && mouse.x < x + w && mouse.y > ry && mouse.y < ry + rowH) hovered = i;
       if (i === selected) this.g.rect(x + 20, ry, w - 40, rowH - 6).fill({ color: PAL.ember, alpha: 0.14 });
-      const col = r.state === "bought" ? PAL.hudDim : r.state === "locked" ? 0x5a4a40 : PAL.hudText;
+      const col = r.state === "bought" ? PAL.hudFaint : r.state === "locked" ? 0x5a4a40 : PAL.hudText;
       this.tx.text(r.label, x + 40, ry + 6, { size: 24, color: col, font: "display" });
-      this.tx.text(r.detail, x + 40, ry + 32, { size: 15, color: PAL.hudDim });
+      this.tx.text(r.detail, x + 40, ry + 32, { size: 16, color: PAL.hudDim });
       this.tx.text(r.right, x + w - 40, ry + 12, { size: 22, color: r.state === "bought" ? PAL.hudDim : 0x8ab4ff, align: "right" }, 1, 0);
     });
     this.tx.text(hint, VIEW_W / 2, y + h - 26, { size: 18, color: PAL.hudDim, align: "center" }, 0.5, 0.5);
@@ -263,20 +263,20 @@ export class Screens {
   }
 
   /** What the necromancer carries (on the pause screen, to the right of the menu). */
-  inventory(title: string, sections: InvSection[], more: (n: number) => string): void {
+  inventory(title: string, sections: InvSection[], more: (n: number) => string, top = 24): void {
     const w = 560;
     const x = VIEW_W - w - 24;
-    const y = 24;
-    const maxH = VIEW_H - 48;
+    const y = top;
+    const maxH = VIEW_H - top - 24;
     // lay out first, to know how tall the frame is and what does not fit
     const lines: { kind: "head" | "row"; s?: InvSection; r?: InvRow; h: number }[] = [];
     for (const sec of sections) {
       lines.push({ kind: "head", s: sec, h: 40 });
       for (const r of sec.rows) {
-        // a rough count of the wrapped lines of the description (15 px serif ≈ 7.2 px a letter)
-        const perLine = Math.floor((w - 80 - (r.icon ? 44 : 0)) / 7.2);
+        // a rough count of the wrapped lines of the description (16 px serif ≈ 7.7 px a letter)
+        const perLine = Math.floor((w - 80 - (r.icon ? 44 : 0)) / 7.7);
         const rows = r.detail ? Math.ceil(r.detail.length / perLine) : 0;
-        lines.push({ kind: "row", r, h: 32 + rows * 19 });
+        lines.push({ kind: "row", r, h: 32 + rows * 21 });
       }
     }
     let used = 70;
@@ -301,7 +301,7 @@ export class Screens {
         if (r.icon) r.icon(this.g, x + 52, cy + (r.detail ? 24 : 14));
         this.tx.text(r.name, x + 36 + ix, cy + 4, { size: 21, color: r.color ?? PAL.hudText, font: "display" });
         if (r.right) this.tx.text(r.right, x + w - 32, cy + 6, { size: 18, color: PAL.hudDim, align: "right" }, 1, 0);
-        if (r.detail) this.tx.text(r.detail, x + 36 + ix, cy + 28, { size: 15, color: PAL.hudDim, wrap: w - 80 - ix });
+        if (r.detail) this.tx.text(r.detail, x + 36 + ix, cy + 28, { size: 16, color: PAL.hudDim, wrap: w - 80 - ix });
       }
       cy += l.h;
     }
@@ -375,11 +375,10 @@ export class Screens {
   }
 
   /** The controls, shown in the crypt and on request. */
-  controls(lines: [string, string][], title: string): void {
+  controls(lines: [string, string][], title: string, y = 160): void {
     const w = 520;
     const h = 64 + lines.length * 30;
     const x = 24;
-    const y = 160;
     frame(this.g, x, y, w, h, 0.7);
     this.tx.text(title, x + 24, y + 16, { size: 24, font: "display" });
     lines.forEach(([k, v], i) => {
